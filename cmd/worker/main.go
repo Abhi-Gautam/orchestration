@@ -12,7 +12,7 @@ import (
 	"orchestration/internal/workflows"
 )
 
-const taskQueue = "dynamic-fan-out-1000"
+const defaultTaskQueue = "dynamic-fan-out-1000"
 
 func main() {
 	c, err := client.Dial(client.Options{HostPort: temporalAddress()})
@@ -21,13 +21,20 @@ func main() {
 	}
 	defer c.Close()
 
+	taskQueue := os.Getenv("TASK_QUEUE")
+	if taskQueue == "" {
+		taskQueue = defaultTaskQueue
+	}
+
 	w := worker.New(c, taskQueue, worker.Options{})
 	w.RegisterWorkflowWithOptions(workflows.GreetingWorkflow, workflow.RegisterOptions{Name: workflows.GreetingWorkflowName})
 	w.RegisterWorkflowWithOptions(workflows.SimpleDiamondWorkflow, workflow.RegisterOptions{Name: workflows.SimpleDiamondWorkflowName})
 	w.RegisterWorkflowWithOptions(workflows.DynamicFanOutWorkflow, workflow.RegisterOptions{Name: workflows.DynamicFanOutWorkflowName})
+	w.RegisterWorkflowWithOptions(workflows.FanOutPolicyWorkflow, workflow.RegisterOptions{Name: workflows.FanOutPolicyWorkflowName})
 	w.RegisterActivity(activities.FormatGreeting)
 	w.RegisterActivity(activities.WaitActivity)
 	w.RegisterActivity(activities.PlanFanOutActivity)
+	w.RegisterActivity(activities.FaultInjectionActivity)
 
 	log.Printf("worker listening on task queue %q", taskQueue)
 	if err := w.Run(worker.InterruptCh()); err != nil {
