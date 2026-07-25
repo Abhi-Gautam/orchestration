@@ -1,0 +1,20 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  entrypoint = ["./tmp/worker"]
+  cmd = "go build -o ./tmp/worker ./cmd/worker"
+  delay = 500
+  exclude_dir = ["tmp", "vendor", "docs", ".git", ".agents", "cmd/web"]
+  exclude_regex = ["_test\\.go"]
+  include_ext = ["go", "toml"]
+  include_dir = ["cmd/worker", "internal"]
+  kill_delay = "2s"
+  send_interrupt = true
+  stop_on_error = true
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true

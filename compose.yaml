@@ -1,6 +1,14 @@
+# Isolated stack for this repository only.
+# Compose project name: orchestration
+#
+# Starts Temporal + the only worker + the product web UI.
+# Does not use default Temporal ports (7233 / 8080).
+name: orchestration
+
 services:
   postgresql:
     image: postgres:14
+    container_name: orchestration-postgresql
     environment:
       POSTGRES_USER: temporal
       POSTGRES_PASSWORD: temporal
@@ -11,9 +19,12 @@ services:
       retries: 10
     volumes:
       - temporal-postgres-data:/var/lib/postgresql/data
+    networks:
+      - orchestration
 
   temporal:
     image: temporalio/auto-setup:1.29.2
+    container_name: orchestration-temporal
     depends_on:
       postgresql:
         condition: service_healthy
@@ -23,12 +34,14 @@ services:
       POSTGRES_USER: temporal
       POSTGRES_PWD: temporal
       POSTGRES_SEEDS: postgresql
-
     ports:
       - "7234:7233"
+    networks:
+      - orchestration
 
   temporal-ui:
     image: temporalio/ui:2.44.1
+    container_name: orchestration-temporal-ui
     depends_on:
       temporal:
         condition: service_started
@@ -36,7 +49,72 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
     ports:
       - "8234:8080"
+    networks:
+      - orchestration
+
+  # The only Temporal worker process for this lab.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+      args:
+        COMMAND: worker
+    image: orchestration-worker:local
+    command: ["-c", ".air.worker.toml"]
+    container_name: orchestration-worker
+    depends_on:
+      temporal:
+        condition: service_started
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE}
+      TASK_QUEUE: ${TASK_QUEUE}
+    restart: unless-stopped
+    volumes:
+      - .:/src
+      - worker-air-tmp:/src/tmp
+    networks:
+      - orchestration
+
+  # Product web UI + Temporal client (does not run a worker).
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+      args:
+        COMMAND: web
+    image: orchestration-web:local
+    command: ["-c", ".air.web.toml"]
+    container_name: orchestration-web
+    depends_on:
+      temporal:
+        condition: service_started
+      worker:
+        condition: service_started
+    environment:
+      WEB_ADDRESS: ${WEB_ADDRESS}
+      TEMPORAL_ADDRESS: temporal:7233
+      # Browser-facing Temporal UI link (host port published by temporal-ui).
+      TEMPORAL_UI_ADDRESS: ${TEMPORAL_UI_ADDRESS}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE}
+      TASK_QUEUE: ${TASK_QUEUE}
+    ports:
+      - "8090:8090"
+    restart: unless-stopped
+    volumes:
+      - .:/src
+      - web-air-tmp:/src/tmp
+    networks:
+      - orchestration
+
+networks:
+  orchestration:
+    name: orchestration-network
 
 volumes:
   temporal-postgres-data:
     name: orchestration-temporal-postgres-data
+  web-air-tmp:
+  worker-air-tmp:

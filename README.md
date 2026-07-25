@@ -33,41 +33,141 @@ Each topic is handled through four stages:
 
 Topic notes and experiments live under `docs/topics/`.
 
+## Architecture
+
+There are exactly two application processes, plus Temporal from Compose:
+
+```text
+Browser  →  cmd/web  →  Temporal Server  →  cmd/worker
+              |               |                  |
+         product UI      compose stack      only worker
+         + HTTP API                        (registers all
+                                           Workflows + Activities)
+```
+
+| Piece | Role |
+| --- | --- |
+| `compose.yaml` | PostgreSQL, Temporal Server, Temporal UI, **worker**, and **web** |
+| `cmd/web` | Embedded web UI; starts and awaits Workflows (no worker inside) |
+| `cmd/worker` | The only Temporal worker process |
+
+Shared task queue and local addresses are configured in `.env`.
+
+The web container never runs a Temporal worker. The worker container is the only worker for this lab.
+
+## Port map (this project only)
+
+These host ports are chosen so this lab can sit beside another Temporal install without sharing servers:
+
+| Service | Host | Notes |
+| --- | --- | --- |
+| Product web UI | `http://localhost:8090` | Compose service `web` |
+| Temporal frontend | `localhost:7234` | maps container `7233` |
+| Temporal UI | `http://localhost:8234` | maps container `8080` |
+| Compose project | `orchestration` | containers named `orchestration-*` |
+| Docker network | `orchestration-network` | isolated from other stacks |
+| Volume | `orchestration-temporal-postgres-data` | project-scoped |
+
+Inside Compose, web and worker talk to Temporal at `temporal:7233`.
+On the host (Air), `.env` uses `localhost:7234`.
+
+A default Temporal stack elsewhere often uses `7233` and `8080`. This repo deliberately does not.
+
 ## Local setup
 
-The development stack uses official images:
-
-- Temporal Server: `temporalio/auto-setup:1.29.2`
-- Temporal UI: `temporalio/ui:2.44.1`
-- PostgreSQL: `postgres:14`
-
-The project uses `localhost:7234` for the Temporal frontend and [http://localhost:8234](http://localhost:8234) for Temporal UI because the default ports are already used by another local environment.
-
-Start the stack:
+Create your local environment file once:
 
 ```sh
-docker compose up -d
+cp .env.example .env
 ```
 
-Run the worker:
+Both Go commands load this file on startup. Docker Compose also uses it for variable interpolation.
+
+### Start everything
 
 ```sh
-go run ./cmd/worker
+docker compose up -d --build
 ```
 
-Run the example from another terminal:
+That starts:
+
+1. PostgreSQL
+2. Temporal Server
+3. Temporal UI
+4. The only worker (`cmd/worker`)
+5. The product web UI (`cmd/web`)
+
+Open:
+
+```text
+http://localhost:8090
+```
+
+Temporal UI: [http://localhost:8234](http://localhost:8234)
+
+Confirm the stack:
 
 ```sh
-go run ./cmd/client
+docker compose ps
 ```
 
-Stop the stack while preserving workflow history:
+You should see `orchestration-postgresql`, `orchestration-temporal`, `orchestration-temporal-ui`, `orchestration-worker`, and `orchestration-web`.
+
+### Rebuild after code changes
+
+```sh
+docker compose up -d --build worker web
+```
+
+### Configuration
+
+Local values live in `.env`; committed defaults are documented in `.env.example`.
+
+| Variable | Purpose |
+| --- | --- |
+| `WEB_ADDRESS` | Product web server listen address |
+| `TEMPORAL_ADDRESS` | Temporal frontend address |
+| `TEMPORAL_UI_ADDRESS` | Browser-facing Temporal UI base URL |
+| `TEMPORAL_NAMESPACE` | Temporal namespace used by both processes |
+| `TASK_QUEUE` | Task queue shared by web and worker |
+
+Compose overrides `TEMPORAL_ADDRESS` with `temporal:7233` inside the container network.
+
+### Air development (optional)
+
+Use Air when you want live reload on the host. Stop the Compose app processes first so you do not run two workers:
+
+```sh
+docker compose stop worker web
+```
+
+Then two terminals:
+
+```sh
+go run github.com/air-verse/air@v1.67.2 -c .air.worker.toml
+```
+
+```sh
+go run github.com/air-verse/air@v1.67.2 -c .air.web.toml
+```
+
+Leave Temporal running:
+
+```sh
+docker compose up -d postgresql temporal temporal-ui
+```
+
+Air is **not** a module dependency. Build output stays under `./tmp/` (gitignored).
+
+### Stop the stack
+
+Preserve workflow history:
 
 ```sh
 docker compose down
 ```
 
-Reset the complete local environment:
+Reset the complete local environment for this project:
 
 ```sh
 docker compose down -v

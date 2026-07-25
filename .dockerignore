@@ -1,0 +1,11 @@
+.git
+.agents
+.tmp
+tmp
+Details.md
+coverage.out
+**/*_test.go
+docs
+*.md
+!go.mod
+!go.sum

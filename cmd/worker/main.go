@@ -3,6 +3,9 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
+
+	"github.com/joho/godotenv"
 
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
@@ -12,19 +15,18 @@ import (
 	"orchestration/internal/workflows"
 )
 
-const defaultTaskQueue = "dynamic-fan-out-1000"
-
 func main() {
-	c, err := client.Dial(client.Options{HostPort: temporalAddress()})
+	_ = godotenv.Load()
+
+	temporalAddress := requiredEnv("TEMPORAL_ADDRESS")
+	namespace := requiredEnv("TEMPORAL_NAMESPACE")
+	taskQueue := requiredEnv("TASK_QUEUE")
+
+	c, err := client.Dial(client.Options{HostPort: temporalAddress, Namespace: namespace})
 	if err != nil {
 		log.Fatalf("connect to Temporal frontend: %v", err)
 	}
 	defer c.Close()
-
-	taskQueue := os.Getenv("TASK_QUEUE")
-	if taskQueue == "" {
-		taskQueue = defaultTaskQueue
-	}
 
 	w := worker.New(c, taskQueue, worker.Options{})
 	w.RegisterWorkflowWithOptions(workflows.GreetingWorkflow, workflow.RegisterOptions{Name: workflows.GreetingWorkflowName})
@@ -36,15 +38,16 @@ func main() {
 	w.RegisterActivity(activities.PlanFanOutActivity)
 	w.RegisterActivity(activities.FaultInjectionActivity)
 
-	log.Printf("worker listening on task queue %q", taskQueue)
+	log.Printf("worker listening on task queue %q (temporal %s)", taskQueue, temporalAddress)
 	if err := w.Run(worker.InterruptCh()); err != nil {
 		log.Fatalf("run worker: %v", err)
 	}
 }
 
-func temporalAddress() string {
-	if address := os.Getenv("TEMPORAL_ADDRESS"); address != "" {
-		return address
+func requiredEnv(key string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		log.Fatalf("required environment variable %s is not set", key)
 	}
-	return "localhost:7234"
+	return value
 }
