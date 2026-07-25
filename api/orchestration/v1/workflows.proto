@@ -152,3 +152,47 @@ message WorkflowFailure {
   bool retryable = 4;
   map<string, string> metadata = 5;
 }
+
+// Conditional branch: CheckInventory at runtime, then FulfillOrder XOR BackorderOrder.
+enum OrderPath {
+  ORDER_PATH_UNSPECIFIED = 0;
+  ORDER_PATH_FULFILL = 1;
+  ORDER_PATH_BACKORDER = 2;
+}
+
+message ConditionalBranchRequest {
+  string order_id = 1;
+  string sku = 2;
+  int32 quantity = 3;
+  // Lab fixture: stock level CheckInventory observes. Production would load this inside the Activity.
+  int32 available_stock = 4;
+}
+
+message InventorySnapshot {
+  string sku = 1;
+  int32 requested_quantity = 2;
+  int32 available_stock = 3;
+  bool in_stock = 4;
+}
+
+message FulfillmentOutcome {
+  string shipment_id = 1;
+  string status = 2;
+}
+
+message BackorderOutcome {
+  string backorder_id = 1;
+  string status = 2;
+  int32 shortfall = 3;
+}
+
+message ConditionalBranchResult {
+  string order_id = 1;
+  OrderPath path = 2;
+  InventorySnapshot inventory = 3;
+  FulfillmentOutcome fulfillment = 4;
+  BackorderOutcome backorder = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp finished_at = 7;
+  google.protobuf.Duration elapsed = 8;
+}

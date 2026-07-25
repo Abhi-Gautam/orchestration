@@ -258,6 +258,56 @@ func (FailureCategory) EnumDescriptor() ([]byte, []int) {
 	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{3}
 }
 
+// Conditional branch: CheckInventory at runtime, then FulfillOrder XOR BackorderOrder.
+type OrderPath int32
+
+const (
+	OrderPath_ORDER_PATH_UNSPECIFIED OrderPath = 0
+	OrderPath_ORDER_PATH_FULFILL     OrderPath = 1
+	OrderPath_ORDER_PATH_BACKORDER   OrderPath = 2
+)
+
+// Enum value maps for OrderPath.
+var (
+	OrderPath_name = map[int32]string{
+		0: "ORDER_PATH_UNSPECIFIED",
+		1: "ORDER_PATH_FULFILL",
+		2: "ORDER_PATH_BACKORDER",
+	}
+	OrderPath_value = map[string]int32{
+		"ORDER_PATH_UNSPECIFIED": 0,
+		"ORDER_PATH_FULFILL":     1,
+		"ORDER_PATH_BACKORDER":   2,
+	}
+)
+
+func (x OrderPath) Enum() *OrderPath {
+	p := new(OrderPath)
+	*p = x
+	return p
+}
+
+func (x OrderPath) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OrderPath) Descriptor() protoreflect.EnumDescriptor {
+	return file_orchestration_v1_workflows_proto_enumTypes[4].Descriptor()
+}
+
+func (OrderPath) Type() protoreflect.EnumType {
+	return &file_orchestration_v1_workflows_proto_enumTypes[4]
+}
+
+func (x OrderPath) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OrderPath.Descriptor instead.
+func (OrderPath) EnumDescriptor() ([]byte, []int) {
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{4}
+}
+
 type GreetingRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -1298,6 +1348,355 @@ func (x *WorkflowFailure) GetMetadata() map[string]string {
 	return nil
 }
 
+type ConditionalBranchRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	OrderId  string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	Sku      string                 `protobuf:"bytes,2,opt,name=sku,proto3" json:"sku,omitempty"`
+	Quantity int32                  `protobuf:"varint,3,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	// Lab fixture: stock level CheckInventory observes. Production would load this inside the Activity.
+	AvailableStock int32 `protobuf:"varint,4,opt,name=available_stock,json=availableStock,proto3" json:"available_stock,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ConditionalBranchRequest) Reset() {
+	*x = ConditionalBranchRequest{}
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConditionalBranchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConditionalBranchRequest) ProtoMessage() {}
+
+func (x *ConditionalBranchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConditionalBranchRequest.ProtoReflect.Descriptor instead.
+func (*ConditionalBranchRequest) Descriptor() ([]byte, []int) {
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ConditionalBranchRequest) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *ConditionalBranchRequest) GetSku() string {
+	if x != nil {
+		return x.Sku
+	}
+	return ""
+}
+
+func (x *ConditionalBranchRequest) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *ConditionalBranchRequest) GetAvailableStock() int32 {
+	if x != nil {
+		return x.AvailableStock
+	}
+	return 0
+}
+
+type InventorySnapshot struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Sku               string                 `protobuf:"bytes,1,opt,name=sku,proto3" json:"sku,omitempty"`
+	RequestedQuantity int32                  `protobuf:"varint,2,opt,name=requested_quantity,json=requestedQuantity,proto3" json:"requested_quantity,omitempty"`
+	AvailableStock    int32                  `protobuf:"varint,3,opt,name=available_stock,json=availableStock,proto3" json:"available_stock,omitempty"`
+	InStock           bool                   `protobuf:"varint,4,opt,name=in_stock,json=inStock,proto3" json:"in_stock,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *InventorySnapshot) Reset() {
+	*x = InventorySnapshot{}
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InventorySnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InventorySnapshot) ProtoMessage() {}
+
+func (x *InventorySnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InventorySnapshot.ProtoReflect.Descriptor instead.
+func (*InventorySnapshot) Descriptor() ([]byte, []int) {
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *InventorySnapshot) GetSku() string {
+	if x != nil {
+		return x.Sku
+	}
+	return ""
+}
+
+func (x *InventorySnapshot) GetRequestedQuantity() int32 {
+	if x != nil {
+		return x.RequestedQuantity
+	}
+	return 0
+}
+
+func (x *InventorySnapshot) GetAvailableStock() int32 {
+	if x != nil {
+		return x.AvailableStock
+	}
+	return 0
+}
+
+func (x *InventorySnapshot) GetInStock() bool {
+	if x != nil {
+		return x.InStock
+	}
+	return false
+}
+
+type FulfillmentOutcome struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ShipmentId    string                 `protobuf:"bytes,1,opt,name=shipment_id,json=shipmentId,proto3" json:"shipment_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FulfillmentOutcome) Reset() {
+	*x = FulfillmentOutcome{}
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FulfillmentOutcome) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FulfillmentOutcome) ProtoMessage() {}
+
+func (x *FulfillmentOutcome) ProtoReflect() protoreflect.Message {
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FulfillmentOutcome.ProtoReflect.Descriptor instead.
+func (*FulfillmentOutcome) Descriptor() ([]byte, []int) {
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *FulfillmentOutcome) GetShipmentId() string {
+	if x != nil {
+		return x.ShipmentId
+	}
+	return ""
+}
+
+func (x *FulfillmentOutcome) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type BackorderOutcome struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BackorderId   string                 `protobuf:"bytes,1,opt,name=backorder_id,json=backorderId,proto3" json:"backorder_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Shortfall     int32                  `protobuf:"varint,3,opt,name=shortfall,proto3" json:"shortfall,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BackorderOutcome) Reset() {
+	*x = BackorderOutcome{}
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BackorderOutcome) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BackorderOutcome) ProtoMessage() {}
+
+func (x *BackorderOutcome) ProtoReflect() protoreflect.Message {
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BackorderOutcome.ProtoReflect.Descriptor instead.
+func (*BackorderOutcome) Descriptor() ([]byte, []int) {
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *BackorderOutcome) GetBackorderId() string {
+	if x != nil {
+		return x.BackorderId
+	}
+	return ""
+}
+
+func (x *BackorderOutcome) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *BackorderOutcome) GetShortfall() int32 {
+	if x != nil {
+		return x.Shortfall
+	}
+	return 0
+}
+
+type ConditionalBranchResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	Path          OrderPath              `protobuf:"varint,2,opt,name=path,proto3,enum=orchestration.v1.OrderPath" json:"path,omitempty"`
+	Inventory     *InventorySnapshot     `protobuf:"bytes,3,opt,name=inventory,proto3" json:"inventory,omitempty"`
+	Fulfillment   *FulfillmentOutcome    `protobuf:"bytes,4,opt,name=fulfillment,proto3" json:"fulfillment,omitempty"`
+	Backorder     *BackorderOutcome      `protobuf:"bytes,5,opt,name=backorder,proto3" json:"backorder,omitempty"`
+	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	Elapsed       *durationpb.Duration   `protobuf:"bytes,8,opt,name=elapsed,proto3" json:"elapsed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConditionalBranchResult) Reset() {
+	*x = ConditionalBranchResult{}
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConditionalBranchResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConditionalBranchResult) ProtoMessage() {}
+
+func (x *ConditionalBranchResult) ProtoReflect() protoreflect.Message {
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConditionalBranchResult.ProtoReflect.Descriptor instead.
+func (*ConditionalBranchResult) Descriptor() ([]byte, []int) {
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ConditionalBranchResult) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *ConditionalBranchResult) GetPath() OrderPath {
+	if x != nil {
+		return x.Path
+	}
+	return OrderPath_ORDER_PATH_UNSPECIFIED
+}
+
+func (x *ConditionalBranchResult) GetInventory() *InventorySnapshot {
+	if x != nil {
+		return x.Inventory
+	}
+	return nil
+}
+
+func (x *ConditionalBranchResult) GetFulfillment() *FulfillmentOutcome {
+	if x != nil {
+		return x.Fulfillment
+	}
+	return nil
+}
+
+func (x *ConditionalBranchResult) GetBackorder() *BackorderOutcome {
+	if x != nil {
+		return x.Backorder
+	}
+	return nil
+}
+
+func (x *ConditionalBranchResult) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *ConditionalBranchResult) GetFinishedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FinishedAt
+	}
+	return nil
+}
+
+func (x *ConditionalBranchResult) GetElapsed() *durationpb.Duration {
+	if x != nil {
+		return x.Elapsed
+	}
+	return nil
+}
+
 var File_orchestration_v1_workflows_proto protoreflect.FileDescriptor
 
 const file_orchestration_v1_workflows_proto_rawDesc = "" +
@@ -1399,7 +1798,36 @@ const file_orchestration_v1_workflows_proto_rawDesc = "" +
 	"\bmetadata\x18\x05 \x03(\v2/.orchestration.v1.WorkflowFailure.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\xab\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8c\x01\n" +
+	"\x18ConditionalBranchRequest\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\tR\aorderId\x12\x10\n" +
+	"\x03sku\x18\x02 \x01(\tR\x03sku\x12\x1a\n" +
+	"\bquantity\x18\x03 \x01(\x05R\bquantity\x12'\n" +
+	"\x0favailable_stock\x18\x04 \x01(\x05R\x0eavailableStock\"\x98\x01\n" +
+	"\x11InventorySnapshot\x12\x10\n" +
+	"\x03sku\x18\x01 \x01(\tR\x03sku\x12-\n" +
+	"\x12requested_quantity\x18\x02 \x01(\x05R\x11requestedQuantity\x12'\n" +
+	"\x0favailable_stock\x18\x03 \x01(\x05R\x0eavailableStock\x12\x19\n" +
+	"\bin_stock\x18\x04 \x01(\bR\ainStock\"M\n" +
+	"\x12FulfillmentOutcome\x12\x1f\n" +
+	"\vshipment_id\x18\x01 \x01(\tR\n" +
+	"shipmentId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"k\n" +
+	"\x10BackorderOutcome\x12!\n" +
+	"\fbackorder_id\x18\x01 \x01(\tR\vbackorderId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1c\n" +
+	"\tshortfall\x18\x03 \x01(\x05R\tshortfall\"\xdf\x03\n" +
+	"\x17ConditionalBranchResult\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\tR\aorderId\x12/\n" +
+	"\x04path\x18\x02 \x01(\x0e2\x1b.orchestration.v1.OrderPathR\x04path\x12A\n" +
+	"\tinventory\x18\x03 \x01(\v2#.orchestration.v1.InventorySnapshotR\tinventory\x12F\n" +
+	"\vfulfillment\x18\x04 \x01(\v2$.orchestration.v1.FulfillmentOutcomeR\vfulfillment\x12@\n" +
+	"\tbackorder\x18\x05 \x01(\v2\".orchestration.v1.BackorderOutcomeR\tbackorder\x129\n" +
+	"\n" +
+	"started_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
+	"\vfinished_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"finishedAt\x123\n" +
+	"\aelapsed\x18\b \x01(\v2\x19.google.protobuf.DurationR\aelapsed*\xab\x01\n" +
 	"\x11AggregationPolicy\x12\"\n" +
 	"\x1eAGGREGATION_POLICY_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cAGGREGATION_POLICY_FAIL_FAST\x10\x01\x12\"\n" +
@@ -1428,7 +1856,11 @@ const file_orchestration_v1_workflows_proto_rawDesc = "" +
 	"\x1bFAILURE_CATEGORY_DEPENDENCY\x10\x03\x12\x1c\n" +
 	"\x18FAILURE_CATEGORY_TIMEOUT\x10\x04\x12\x1d\n" +
 	"\x19FAILURE_CATEGORY_CANCELED\x10\x05\x12\x1d\n" +
-	"\x19FAILURE_CATEGORY_INTERNAL\x10\x06B4Z2orchestration/gen/orchestration/v1;orchestrationv1b\x06proto3"
+	"\x19FAILURE_CATEGORY_INTERNAL\x10\x06*Y\n" +
+	"\tOrderPath\x12\x1a\n" +
+	"\x16ORDER_PATH_UNSPECIFIED\x10\x00\x12\x16\n" +
+	"\x12ORDER_PATH_FULFILL\x10\x01\x12\x18\n" +
+	"\x14ORDER_PATH_BACKORDER\x10\x02B4Z2orchestration/gen/orchestration/v1;orchestrationv1b\x06proto3"
 
 var (
 	file_orchestration_v1_workflows_proto_rawDescOnce sync.Once
@@ -1442,78 +1874,91 @@ func file_orchestration_v1_workflows_proto_rawDescGZIP() []byte {
 	return file_orchestration_v1_workflows_proto_rawDescData
 }
 
-var file_orchestration_v1_workflows_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_orchestration_v1_workflows_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_orchestration_v1_workflows_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_orchestration_v1_workflows_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_orchestration_v1_workflows_proto_goTypes = []any{
-	(AggregationPolicy)(0),        // 0: orchestration.v1.AggregationPolicy
-	(FaultMode)(0),                // 1: orchestration.v1.FaultMode
-	(ActivityFailureKind)(0),      // 2: orchestration.v1.ActivityFailureKind
-	(FailureCategory)(0),          // 3: orchestration.v1.FailureCategory
-	(*GreetingRequest)(nil),       // 4: orchestration.v1.GreetingRequest
-	(*GreetingResult)(nil),        // 5: orchestration.v1.GreetingResult
-	(*WaitResult)(nil),            // 6: orchestration.v1.WaitResult
-	(*SimpleDiamondRequest)(nil),  // 7: orchestration.v1.SimpleDiamondRequest
-	(*SimpleDiamondResult)(nil),   // 8: orchestration.v1.SimpleDiamondResult
-	(*DynamicFanOutRequest)(nil),  // 9: orchestration.v1.DynamicFanOutRequest
-	(*DynamicFanOutResult)(nil),   // 10: orchestration.v1.DynamicFanOutResult
-	(*FaultBranchSpec)(nil),       // 11: orchestration.v1.FaultBranchSpec
-	(*FanOutPolicyRequest)(nil),   // 12: orchestration.v1.FanOutPolicyRequest
-	(*ActivityFailure)(nil),       // 13: orchestration.v1.ActivityFailure
-	(*FaultActivityResult)(nil),   // 14: orchestration.v1.FaultActivityResult
-	(*ActivityOutcome)(nil),       // 15: orchestration.v1.ActivityOutcome
-	(*FanOutPolicyResult)(nil),    // 16: orchestration.v1.FanOutPolicyResult
-	(*WorkflowFailure)(nil),       // 17: orchestration.v1.WorkflowFailure
-	nil,                           // 18: orchestration.v1.WorkflowFailure.MetadataEntry
-	(*timestamppb.Timestamp)(nil), // 19: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 20: google.protobuf.Duration
+	(AggregationPolicy)(0),           // 0: orchestration.v1.AggregationPolicy
+	(FaultMode)(0),                   // 1: orchestration.v1.FaultMode
+	(ActivityFailureKind)(0),         // 2: orchestration.v1.ActivityFailureKind
+	(FailureCategory)(0),             // 3: orchestration.v1.FailureCategory
+	(OrderPath)(0),                   // 4: orchestration.v1.OrderPath
+	(*GreetingRequest)(nil),          // 5: orchestration.v1.GreetingRequest
+	(*GreetingResult)(nil),           // 6: orchestration.v1.GreetingResult
+	(*WaitResult)(nil),               // 7: orchestration.v1.WaitResult
+	(*SimpleDiamondRequest)(nil),     // 8: orchestration.v1.SimpleDiamondRequest
+	(*SimpleDiamondResult)(nil),      // 9: orchestration.v1.SimpleDiamondResult
+	(*DynamicFanOutRequest)(nil),     // 10: orchestration.v1.DynamicFanOutRequest
+	(*DynamicFanOutResult)(nil),      // 11: orchestration.v1.DynamicFanOutResult
+	(*FaultBranchSpec)(nil),          // 12: orchestration.v1.FaultBranchSpec
+	(*FanOutPolicyRequest)(nil),      // 13: orchestration.v1.FanOutPolicyRequest
+	(*ActivityFailure)(nil),          // 14: orchestration.v1.ActivityFailure
+	(*FaultActivityResult)(nil),      // 15: orchestration.v1.FaultActivityResult
+	(*ActivityOutcome)(nil),          // 16: orchestration.v1.ActivityOutcome
+	(*FanOutPolicyResult)(nil),       // 17: orchestration.v1.FanOutPolicyResult
+	(*WorkflowFailure)(nil),          // 18: orchestration.v1.WorkflowFailure
+	(*ConditionalBranchRequest)(nil), // 19: orchestration.v1.ConditionalBranchRequest
+	(*InventorySnapshot)(nil),        // 20: orchestration.v1.InventorySnapshot
+	(*FulfillmentOutcome)(nil),       // 21: orchestration.v1.FulfillmentOutcome
+	(*BackorderOutcome)(nil),         // 22: orchestration.v1.BackorderOutcome
+	(*ConditionalBranchResult)(nil),  // 23: orchestration.v1.ConditionalBranchResult
+	nil,                              // 24: orchestration.v1.WorkflowFailure.MetadataEntry
+	(*timestamppb.Timestamp)(nil),    // 25: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),      // 26: google.protobuf.Duration
 }
 var file_orchestration_v1_workflows_proto_depIdxs = []int32{
-	19, // 0: orchestration.v1.WaitResult.started_at:type_name -> google.protobuf.Timestamp
-	19, // 1: orchestration.v1.WaitResult.finished_at:type_name -> google.protobuf.Timestamp
-	20, // 2: orchestration.v1.WaitResult.elapsed:type_name -> google.protobuf.Duration
-	20, // 3: orchestration.v1.SimpleDiamondRequest.prepare_duration:type_name -> google.protobuf.Duration
-	20, // 4: orchestration.v1.SimpleDiamondRequest.branch_a_duration:type_name -> google.protobuf.Duration
-	20, // 5: orchestration.v1.SimpleDiamondRequest.branch_b_duration:type_name -> google.protobuf.Duration
-	20, // 6: orchestration.v1.SimpleDiamondRequest.finalize_duration:type_name -> google.protobuf.Duration
-	19, // 7: orchestration.v1.SimpleDiamondResult.started_at:type_name -> google.protobuf.Timestamp
-	19, // 8: orchestration.v1.SimpleDiamondResult.finished_at:type_name -> google.protobuf.Timestamp
-	20, // 9: orchestration.v1.SimpleDiamondResult.elapsed:type_name -> google.protobuf.Duration
-	6,  // 10: orchestration.v1.SimpleDiamondResult.nodes:type_name -> orchestration.v1.WaitResult
-	20, // 11: orchestration.v1.DynamicFanOutRequest.branch_duration:type_name -> google.protobuf.Duration
-	20, // 12: orchestration.v1.DynamicFanOutRequest.finalize_duration:type_name -> google.protobuf.Duration
-	19, // 13: orchestration.v1.DynamicFanOutResult.started_at:type_name -> google.protobuf.Timestamp
-	19, // 14: orchestration.v1.DynamicFanOutResult.finished_at:type_name -> google.protobuf.Timestamp
-	20, // 15: orchestration.v1.DynamicFanOutResult.elapsed:type_name -> google.protobuf.Duration
-	19, // 16: orchestration.v1.DynamicFanOutResult.first_branch_started_at:type_name -> google.protobuf.Timestamp
-	19, // 17: orchestration.v1.DynamicFanOutResult.last_branch_finished_at:type_name -> google.protobuf.Timestamp
-	6,  // 18: orchestration.v1.DynamicFanOutResult.finalize:type_name -> orchestration.v1.WaitResult
+	25, // 0: orchestration.v1.WaitResult.started_at:type_name -> google.protobuf.Timestamp
+	25, // 1: orchestration.v1.WaitResult.finished_at:type_name -> google.protobuf.Timestamp
+	26, // 2: orchestration.v1.WaitResult.elapsed:type_name -> google.protobuf.Duration
+	26, // 3: orchestration.v1.SimpleDiamondRequest.prepare_duration:type_name -> google.protobuf.Duration
+	26, // 4: orchestration.v1.SimpleDiamondRequest.branch_a_duration:type_name -> google.protobuf.Duration
+	26, // 5: orchestration.v1.SimpleDiamondRequest.branch_b_duration:type_name -> google.protobuf.Duration
+	26, // 6: orchestration.v1.SimpleDiamondRequest.finalize_duration:type_name -> google.protobuf.Duration
+	25, // 7: orchestration.v1.SimpleDiamondResult.started_at:type_name -> google.protobuf.Timestamp
+	25, // 8: orchestration.v1.SimpleDiamondResult.finished_at:type_name -> google.protobuf.Timestamp
+	26, // 9: orchestration.v1.SimpleDiamondResult.elapsed:type_name -> google.protobuf.Duration
+	7,  // 10: orchestration.v1.SimpleDiamondResult.nodes:type_name -> orchestration.v1.WaitResult
+	26, // 11: orchestration.v1.DynamicFanOutRequest.branch_duration:type_name -> google.protobuf.Duration
+	26, // 12: orchestration.v1.DynamicFanOutRequest.finalize_duration:type_name -> google.protobuf.Duration
+	25, // 13: orchestration.v1.DynamicFanOutResult.started_at:type_name -> google.protobuf.Timestamp
+	25, // 14: orchestration.v1.DynamicFanOutResult.finished_at:type_name -> google.protobuf.Timestamp
+	26, // 15: orchestration.v1.DynamicFanOutResult.elapsed:type_name -> google.protobuf.Duration
+	25, // 16: orchestration.v1.DynamicFanOutResult.first_branch_started_at:type_name -> google.protobuf.Timestamp
+	25, // 17: orchestration.v1.DynamicFanOutResult.last_branch_finished_at:type_name -> google.protobuf.Timestamp
+	7,  // 18: orchestration.v1.DynamicFanOutResult.finalize:type_name -> orchestration.v1.WaitResult
 	1,  // 19: orchestration.v1.FaultBranchSpec.mode:type_name -> orchestration.v1.FaultMode
-	20, // 20: orchestration.v1.FaultBranchSpec.work_duration:type_name -> google.protobuf.Duration
-	20, // 21: orchestration.v1.FaultBranchSpec.stall_duration:type_name -> google.protobuf.Duration
-	20, // 22: orchestration.v1.FaultBranchSpec.heartbeat_interval:type_name -> google.protobuf.Duration
+	26, // 20: orchestration.v1.FaultBranchSpec.work_duration:type_name -> google.protobuf.Duration
+	26, // 21: orchestration.v1.FaultBranchSpec.stall_duration:type_name -> google.protobuf.Duration
+	26, // 22: orchestration.v1.FaultBranchSpec.heartbeat_interval:type_name -> google.protobuf.Duration
 	0,  // 23: orchestration.v1.FanOutPolicyRequest.policy:type_name -> orchestration.v1.AggregationPolicy
-	11, // 24: orchestration.v1.FanOutPolicyRequest.branches:type_name -> orchestration.v1.FaultBranchSpec
-	20, // 25: orchestration.v1.FanOutPolicyRequest.finalize_duration:type_name -> google.protobuf.Duration
+	12, // 24: orchestration.v1.FanOutPolicyRequest.branches:type_name -> orchestration.v1.FaultBranchSpec
+	26, // 25: orchestration.v1.FanOutPolicyRequest.finalize_duration:type_name -> google.protobuf.Duration
 	2,  // 26: orchestration.v1.ActivityFailure.kind:type_name -> orchestration.v1.ActivityFailureKind
 	1,  // 27: orchestration.v1.FaultActivityResult.outcome:type_name -> orchestration.v1.FaultMode
-	19, // 28: orchestration.v1.FaultActivityResult.started_at:type_name -> google.protobuf.Timestamp
-	19, // 29: orchestration.v1.FaultActivityResult.finished_at:type_name -> google.protobuf.Timestamp
-	20, // 30: orchestration.v1.FaultActivityResult.elapsed:type_name -> google.protobuf.Duration
-	14, // 31: orchestration.v1.ActivityOutcome.result:type_name -> orchestration.v1.FaultActivityResult
-	13, // 32: orchestration.v1.ActivityOutcome.failure:type_name -> orchestration.v1.ActivityFailure
+	25, // 28: orchestration.v1.FaultActivityResult.started_at:type_name -> google.protobuf.Timestamp
+	25, // 29: orchestration.v1.FaultActivityResult.finished_at:type_name -> google.protobuf.Timestamp
+	26, // 30: orchestration.v1.FaultActivityResult.elapsed:type_name -> google.protobuf.Duration
+	15, // 31: orchestration.v1.ActivityOutcome.result:type_name -> orchestration.v1.FaultActivityResult
+	14, // 32: orchestration.v1.ActivityOutcome.failure:type_name -> orchestration.v1.ActivityFailure
 	0,  // 33: orchestration.v1.FanOutPolicyResult.policy:type_name -> orchestration.v1.AggregationPolicy
-	15, // 34: orchestration.v1.FanOutPolicyResult.outcomes:type_name -> orchestration.v1.ActivityOutcome
-	6,  // 35: orchestration.v1.FanOutPolicyResult.finalize:type_name -> orchestration.v1.WaitResult
-	19, // 36: orchestration.v1.FanOutPolicyResult.started_at:type_name -> google.protobuf.Timestamp
-	19, // 37: orchestration.v1.FanOutPolicyResult.finished_at:type_name -> google.protobuf.Timestamp
-	20, // 38: orchestration.v1.FanOutPolicyResult.elapsed:type_name -> google.protobuf.Duration
+	16, // 34: orchestration.v1.FanOutPolicyResult.outcomes:type_name -> orchestration.v1.ActivityOutcome
+	7,  // 35: orchestration.v1.FanOutPolicyResult.finalize:type_name -> orchestration.v1.WaitResult
+	25, // 36: orchestration.v1.FanOutPolicyResult.started_at:type_name -> google.protobuf.Timestamp
+	25, // 37: orchestration.v1.FanOutPolicyResult.finished_at:type_name -> google.protobuf.Timestamp
+	26, // 38: orchestration.v1.FanOutPolicyResult.elapsed:type_name -> google.protobuf.Duration
 	3,  // 39: orchestration.v1.WorkflowFailure.category:type_name -> orchestration.v1.FailureCategory
-	18, // 40: orchestration.v1.WorkflowFailure.metadata:type_name -> orchestration.v1.WorkflowFailure.MetadataEntry
-	41, // [41:41] is the sub-list for method output_type
-	41, // [41:41] is the sub-list for method input_type
-	41, // [41:41] is the sub-list for extension type_name
-	41, // [41:41] is the sub-list for extension extendee
-	0,  // [0:41] is the sub-list for field type_name
+	24, // 40: orchestration.v1.WorkflowFailure.metadata:type_name -> orchestration.v1.WorkflowFailure.MetadataEntry
+	4,  // 41: orchestration.v1.ConditionalBranchResult.path:type_name -> orchestration.v1.OrderPath
+	20, // 42: orchestration.v1.ConditionalBranchResult.inventory:type_name -> orchestration.v1.InventorySnapshot
+	21, // 43: orchestration.v1.ConditionalBranchResult.fulfillment:type_name -> orchestration.v1.FulfillmentOutcome
+	22, // 44: orchestration.v1.ConditionalBranchResult.backorder:type_name -> orchestration.v1.BackorderOutcome
+	25, // 45: orchestration.v1.ConditionalBranchResult.started_at:type_name -> google.protobuf.Timestamp
+	25, // 46: orchestration.v1.ConditionalBranchResult.finished_at:type_name -> google.protobuf.Timestamp
+	26, // 47: orchestration.v1.ConditionalBranchResult.elapsed:type_name -> google.protobuf.Duration
+	48, // [48:48] is the sub-list for method output_type
+	48, // [48:48] is the sub-list for method input_type
+	48, // [48:48] is the sub-list for extension type_name
+	48, // [48:48] is the sub-list for extension extendee
+	0,  // [0:48] is the sub-list for field type_name
 }
 
 func init() { file_orchestration_v1_workflows_proto_init() }
@@ -1526,8 +1971,8 @@ func file_orchestration_v1_workflows_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_orchestration_v1_workflows_proto_rawDesc), len(file_orchestration_v1_workflows_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   15,
+			NumEnums:      5,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

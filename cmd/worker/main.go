@@ -36,6 +36,9 @@ func main() {
 	w.RegisterActivity(activities.WaitActivity)
 	w.RegisterActivity(activities.PlanFanOutActivity)
 	w.RegisterActivity(activities.FaultInjectionActivity)
+	w.RegisterActivity(activities.CheckInventory)
+	w.RegisterActivity(activities.FulfillOrder)
+	w.RegisterActivity(activities.BackorderOrder)
 
 	log.Printf("worker listening on task queue %q (temporal %s)", taskQueue, temporalAddress)
 	if err := w.Run(worker.InterruptCh()); err != nil {

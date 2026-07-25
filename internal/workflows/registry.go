@@ -50,6 +50,18 @@ func Definitions() []Definition {
 			NewResult:  func() proto.Message { return &orchestrationv1.FanOutPolicyResult{} },
 			Example:    fanOutPolicyExample(),
 		},
+		{
+			ID: "conditional-branch", Name: "Conditional Branch", Description: "Check inventory at runtime, then fulfill or backorder — exactly one path Activity.",
+			TemporalName: ConditionalBranchWorkflowName, Workflow: ConditionalBranchWorkflow,
+			NewRequest: func() proto.Message { return &orchestrationv1.ConditionalBranchRequest{} },
+			NewResult:  func() proto.Message { return &orchestrationv1.ConditionalBranchResult{} },
+			Example: &orchestrationv1.ConditionalBranchRequest{
+				OrderId:        "order-1001",
+				Sku:            "sku-widget",
+				Quantity:       2,
+				AvailableStock: 5,
+			},
+		},
 	}
 }
 
