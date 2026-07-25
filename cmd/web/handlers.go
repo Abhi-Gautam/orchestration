@@ -4,24 +4,68 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/fs"
 	"log"
 	"net/http"
 	"strings"
 )
 
 func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
-	data, err := fs.ReadFile(staticFiles, "static/index.html")
+	view, err := buildPageView(workflowCatalog())
 	if err != nil {
-		http.Error(w, "index not found", http.StatusInternalServerError)
+		http.Error(w, "failed to render page", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(data)
+	s.writeTemplate(w, http.StatusOK, "page.gohtml", s.templates.page, view)
 }
+
+func (s *server) handleWorkflowListPartial(w http.ResponseWriter, _ *http.Request) {
+	s.writeTemplate(w, http.StatusOK, "workflow_list.gohtml", s.templates.workflowList, workflowCatalog())
+}
+
+func (s *server) handleRunHTML(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.writeTemplate(w, http.StatusBadRequest, "run_error.gohtml", s.templates.runError, runErrorView{
+			Message: "Invalid form submission.",
+		})
+		return
+	}
+
+	workflowID := strings.TrimSpace(r.FormValue("workflow"))
+	rawInput := strings.TrimSpace(r.FormValue("input"))
+	if workflowID == "" {
+		s.writeTemplate(w, http.StatusBadRequest, "run_error.gohtml", s.templates.runError, runErrorView{
+			Message: "Missing workflow id.",
+		})
+		return
+	}
+	if rawInput == "" || rawInput == "null" {
+		s.writeTemplate(w, http.StatusBadRequest, "run_error.gohtml", s.templates.runError, runErrorView{
+			Message: "Missing workflow input.",
+		})
+		return
+	}
+	if !json.Valid([]byte(rawInput)) {
+		s.writeTemplate(w, http.StatusBadRequest, "run_error.gohtml", s.templates.runError, runErrorView{
+			Message: "The payload is not valid JSON.",
+		})
+		return
+	}
+
+	response, err := s.executeWorkflow(r.Context(), workflowID, json.RawMessage(rawInput))
+	if err != nil {
+		s.writeTemplate(w, runHTMLStatus(err), "run_error.gohtml", s.templates.runError, runErrorView{
+			Message: publicRunError(err),
+		})
+		return
+	}
+
+	s.writeTemplate(w, http.StatusOK, "run_card.gohtml", s.templates.runCard, buildRunCardView(response))
+}
+
 func (s *server) handleListWorkflows(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, catalogResponse{Workflows: workflowCatalog()})
 }
+
 func (s *server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 	var req runRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
@@ -38,23 +82,48 @@ func (s *server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Missing workflow input.")
 		return
 	}
+
 	response, err := s.executeWorkflow(r.Context(), req.Workflow, req.Input)
 	if err != nil {
-		var inputErr *inputError
-		if errors.As(err, &inputErr) {
-			writeError(w, http.StatusBadRequest, inputErr.Error())
-			return
-		}
-		var startErr *startError
-		if errors.As(err, &startErr) {
-			writeError(w, http.StatusBadGateway, startErr.Error())
-			return
-		}
-		log.Printf("run workflow %q: %v", req.Workflow, err)
-		writeError(w, http.StatusInternalServerError, "Unexpected server failure while running the workflow.")
+		writeError(w, runHTMLStatus(err), publicRunError(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *server) writeTemplate(w http.ResponseWriter, status int, name string, tmpl interface {
+	ExecuteTemplate(w io.Writer, name string, data any) error
+}, data any) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if err := tmpl.ExecuteTemplate(w, name, data); err != nil {
+		log.Printf("render template %s: %v", name, err)
+	}
+}
+
+func runHTMLStatus(err error) int {
+	var inputErr *inputError
+	if errors.As(err, &inputErr) {
+		return http.StatusBadRequest
+	}
+	var startErr *startError
+	if errors.As(err, &startErr) {
+		return http.StatusBadGateway
+	}
+	return http.StatusInternalServerError
+}
+
+func publicRunError(err error) string {
+	var inputErr *inputError
+	if errors.As(err, &inputErr) {
+		return inputErr.Error()
+	}
+	var startErr *startError
+	if errors.As(err, &startErr) {
+		return startErr.Error()
+	}
+	log.Printf("run workflow: %v", err)
+	return "Unexpected server failure while running the workflow."
 }
 
 func decodeOne(decoder *json.Decoder, dest any) error {
@@ -69,6 +138,7 @@ func decodeOne(decoder *json.Decoder, dest any) error {
 	}
 	return nil
 }
+
 func sanitizeDecodeError(err error) string {
 	msg := strings.TrimPrefix(err.Error(), "json: ")
 	if len(msg) > 200 {
@@ -84,6 +154,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 		log.Printf("write json response: %v", err)
 	}
 }
+
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, errorResponse{Error: message})
 }

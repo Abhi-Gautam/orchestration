@@ -1,0 +1,14 @@
+{{range .}}
+<button
+  type="button"
+  class="workflow-option"
+  data-workflow-id="{{.ID}}"
+  @click="selectById('{{.ID}}')"
+>
+  <span class="workflow-option-name">{{.Name}}</span>
+  <span class="selection-mark" aria-hidden="true" x-text="selectedId === '{{.ID}}' ? '✓' : ''"></span>
+  <span class="workflow-option-id">{{.ID}}</span>
+</button>
+{{else}}
+<p class="muted">No workflows are currently available.</p>
+{{end}}

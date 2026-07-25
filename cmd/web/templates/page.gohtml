@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Run and inspect Temporal workflow examples.">
+  <title>Temporal Workflow Lab</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4" crossorigin="anonymous"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js" crossorigin="anonymous"></script>
+  <style>[x-cloak]{display:none!important}</style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div>
+        <p class="eyebrow">Developer console</p>
+        <h1>Temporal Workflow Lab</h1>
+      </div>
+      <p class="header-summary">Run workflow examples concurrently and inspect their results.</p>
+    </div>
+  </header>
+
+  <main
+    id="main-content"
+    class="app-shell"
+    x-data="workflowLab()"
+    x-cloak
+  >
+    <aside class="workflow-panel" aria-labelledby="workflows-heading">
+      <div class="panel-heading">
+        <div>
+          <p class="section-kicker">Step 1</p>
+          <h2 id="workflows-heading">Choose a workflow</h2>
+        </div>
+        <button
+          class="button button-secondary button-compact"
+          type="button"
+          @click="refreshCatalog()"
+          :disabled="refreshing"
+          x-text="refreshing ? 'Loading…' : 'Refresh'"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <p class="muted" x-show="workflows.length === 0" x-text="emptyCatalogMessage"></p>
+      <div id="workflow-list" class="workflow-list" aria-label="Available workflows">
+        <template x-for="workflow in workflows" :key="workflow.id">
+          <button
+            type="button"
+            class="workflow-option"
+            :aria-pressed="selectedId === workflow.id"
+            @click="selectById(workflow.id)"
+          >
+            <span class="workflow-option-name" x-text="workflow.name"></span>
+            <span class="selection-mark" aria-hidden="true" x-text="selectedId === workflow.id ? '✓' : ''"></span>
+            <span class="workflow-option-id" x-text="workflow.id"></span>
+          </button>
+        </template>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <section class="card configuration-card" aria-labelledby="configuration-heading">
+        <div class="section-heading">
+          <p class="section-kicker">Step 2</p>
+          <h2 id="configuration-heading">Configure the run</h2>
+        </div>
+
+        <div class="empty-state" x-show="!selectedId">
+          <p>Select a workflow to review its description and input payload.</p>
+        </div>
+
+        <form
+          id="run-form"
+          x-show="selectedId"
+          x-cloak
+          novalidate
+          hx-post="/runs"
+          hx-target="#runs-list"
+          hx-swap="afterbegin"
+          hx-disabled-elt="none"
+          @submit="onSubmit($event)"
+          @htmx:config-request="onConfigRequest($event)"
+          @htmx:before-request="onBeforeRequest($event)"
+          @htmx:after-request="onAfterRequest($event)"
+          @htmx:send-error="onSendError()"
+        >
+          <input type="hidden" name="workflow" :value="selectedId">
+
+          <div class="selected-workflow-heading">
+            <div>
+              <p class="field-label">Selected workflow</p>
+              <h3 x-text="selectedName"></h3>
+            </div>
+            <span class="code-label" x-text="selectedId" :title="selectedId"></span>
+          </div>
+
+          <p class="workflow-description" x-text="selectedDescription"></p>
+
+          <div class="field-group">
+            <div class="label-row">
+              <label for="payload-input">Input payload</label>
+              <span>JSON</span>
+            </div>
+            <textarea
+              id="payload-input"
+              name="input"
+              rows="14"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+              x-model="payload"
+              :aria-invalid="payloadError ? 'true' : 'false'"
+              aria-describedby="payload-help payload-error"
+            ></textarea>
+            <p id="payload-help" class="field-help">
+              Edit the example input, then run. You can start another run while earlier ones are still in flight.
+            </p>
+            <p id="payload-error" class="field-error" role="alert" x-show="payloadError" x-text="payloadError"></p>
+          </div>
+
+          <div class="run-actions">
+            <button class="button button-primary" type="submit">
+              Run workflow
+            </button>
+            <div class="running-indicator" role="status" aria-live="polite" x-show="inflight > 0">
+              <span class="activity-dot" aria-hidden="true"></span>
+              <span x-text="inflightLabel"></span>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <section class="runs-section" aria-labelledby="runs-heading">
+        <div class="section-heading runs-heading">
+          <div>
+            <p class="section-kicker">Runs</p>
+            <h2 id="runs-heading">In flight and completed</h2>
+          </div>
+          <button
+            type="button"
+            class="button button-secondary button-compact"
+            x-show="pending.length > 0 || hasCompletedRuns"
+            @click="clearCompleted()"
+          >
+            Clear completed
+          </button>
+        </div>
+
+        <div id="pending-runs" class="runs-stack">
+          <template x-for="run in pending" :key="run.id">
+            <article class="card result-card result-pending">
+              <div class="result-header">
+                <div>
+                  <p class="section-kicker">In flight</p>
+                  <h2 x-text="run.name"></h2>
+                </div>
+                <span class="status-badge status-warning">Running</span>
+              </div>
+              <p class="result-message">
+                Waiting for the server to finish this synchronous run…
+                <span class="running-time" x-text="formatElapsed(run.startedAt)"></span>
+              </p>
+              <dl class="metadata-grid">
+                <div>
+                  <dt>Workflow</dt>
+                  <dd class="monospace" x-text="run.workflowId"></dd>
+                </div>
+                <div>
+                  <dt>Client timer</dt>
+                  <dd x-text="formatElapsed(run.startedAt)"></dd>
+                </div>
+              </dl>
+            </article>
+          </template>
+        </div>
+
+        <div id="runs-list" class="runs-stack"></div>
+
+        <div class="empty-state" x-show="pending.length === 0 && !hasCompletedRuns">
+          <p>No runs yet. Configure a workflow and click Run. Multiple runs can execute at once.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script id="workflow-catalog" type="application/json">{{.CatalogJSON}}</script>
+  <script>
+    // Swap error HTML fragments into the runs list too (4xx validation / start failures).
+    htmx.config.responseHandling = [
+      { code: "[1235]..", swap: true },
+      { code: "4..", swap: true, error: true },
+      { code: "...", swap: false }
+    ];
+
+    function workflowLab() {
+      let workflows = [];
+      try {
+        workflows = JSON.parse(document.getElementById("workflow-catalog")?.textContent || "[]");
+      } catch (_) {
+        workflows = [];
+      }
+
+      return {
+        workflows,
+        selectedId: "",
+        selectedName: "",
+        selectedDescription: "",
+        payload: "{\n}",
+        payloadError: "",
+        inflight: 0,
+        pending: [],
+        hasCompletedRuns: false,
+        refreshing: false,
+        emptyCatalogMessage: "No workflows are currently available.",
+        now: performance.now(),
+        _timer: null,
+
+        get inflightLabel() {
+          return this.inflight === 1 ? "1 run in flight" : `${this.inflight} runs in flight`;
+        },
+
+        init() {
+          if (this.workflows.length > 0) {
+            this.selectById(this.workflows[0].id);
+          }
+          this._timer = window.setInterval(() => {
+            this.now = performance.now();
+          }, 100);
+        },
+
+        destroy() {
+          if (this._timer) window.clearInterval(this._timer);
+        },
+
+        selectById(id) {
+          const workflow = this.workflows.find((item) => item.id === id);
+          if (!workflow) return;
+          this.selectedId = workflow.id;
+          this.selectedName = workflow.name;
+          this.selectedDescription = workflow.description || "No description provided.";
+          this.payload = JSON.stringify(workflow.exampleInput ?? {}, null, 2);
+          this.payloadError = "";
+        },
+
+        async refreshCatalog() {
+          this.refreshing = true;
+          try {
+            const response = await fetch("/api/workflows", { headers: { Accept: "application/json" } });
+            if (!response.ok) throw new Error("refresh failed");
+            const data = await response.json();
+            if (!data || !Array.isArray(data.workflows)) throw new Error("bad catalog");
+            this.workflows = data.workflows;
+            if (this.workflows.length === 0) {
+              this.selectedId = "";
+              this.emptyCatalogMessage = "No workflows are currently available.";
+              return;
+            }
+            if (!this.workflows.find((item) => item.id === this.selectedId)) {
+              this.selectById(this.workflows[0].id);
+            }
+          } catch (_) {
+            this.emptyCatalogMessage = "Could not refresh workflows.";
+          } finally {
+            this.refreshing = false;
+          }
+        },
+
+        onSubmit(event) {
+          this.payloadError = "";
+          const raw = this.payload.trim();
+          if (!raw) {
+            event.preventDefault();
+            this.payloadError = "Enter a JSON payload before running the workflow.";
+            return;
+          }
+          try {
+            JSON.parse(raw);
+          } catch (error) {
+            event.preventDefault();
+            const detail = error instanceof Error ? error.message : "Invalid JSON.";
+            this.payloadError = `The payload is not valid JSON. ${detail}`;
+          }
+        },
+
+        onConfigRequest(event) {
+          event.detail.parameters.workflow = this.selectedId;
+          event.detail.parameters.input = this.payload;
+        },
+
+        onBeforeRequest(event) {
+          const id = crypto.randomUUID();
+          this.inflight += 1;
+          this.pending.unshift({
+            id,
+            name: this.selectedName || this.selectedId,
+            workflowId: this.selectedId,
+            startedAt: performance.now(),
+          });
+          if (event.detail.xhr) {
+            event.detail.xhr.__pendingId = id;
+          }
+        },
+
+        onAfterRequest(event) {
+          this.inflight = Math.max(0, this.inflight - 1);
+          const pendingId = event.detail.xhr && event.detail.xhr.__pendingId;
+          if (pendingId) {
+            this.pending = this.pending.filter((run) => run.id !== pendingId);
+          } else if (this.pending.length) {
+            this.pending.shift();
+          }
+          const list = document.getElementById("runs-list");
+          this.hasCompletedRuns = !!(list && list.children.length > 0);
+        },
+
+        onSendError() {
+          this.payloadError = "The server could not be reached. Check your connection and try again.";
+        },
+
+        clearCompleted() {
+          const list = document.getElementById("runs-list");
+          if (list) list.replaceChildren();
+          this.hasCompletedRuns = false;
+        },
+
+        formatElapsed(startedAt) {
+          const ms = this.now - startedAt;
+          if (!Number.isFinite(ms) || ms < 0) return "0ms";
+          if (ms < 1000) return `${Math.round(ms)}ms`;
+          return `${(ms / 1000).toFixed(1)}s`;
+        },
+      };
+    }
+  </script>
+</body>
+</html>

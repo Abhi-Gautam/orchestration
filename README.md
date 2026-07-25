@@ -40,16 +40,18 @@ There are exactly two application processes, plus Temporal from Compose:
 ```text
 Browser  →  cmd/web  →  Temporal Server  →  cmd/worker
               |               |                  |
-         product UI      compose stack      only worker
-         + HTTP API                        (registers all
-                                           Workflows + Activities)
+     HTMX + Alpine       compose stack      only worker
+     HTML partials                         (registers all
+     + JSON API                            Workflows + Activities)
 ```
 
 | Piece | Role |
 | --- | --- |
 | `compose.yaml` | PostgreSQL, Temporal Server, Temporal UI, **worker**, and **web** |
-| `cmd/web` | Embedded web UI; starts and awaits Workflows (no worker inside) |
+| `cmd/web` | Server-rendered UI (HTMX + Alpine) and Temporal client; no worker inside |
 | `cmd/worker` | The only Temporal worker process |
+
+The UI is plain HTML templates with **HTMX** (async form posts / partial swaps) and **Alpine.js** (selection state, concurrent in-flight run cards). Endpoints stay synchronous; the browser can run several `/runs` requests at once.
 
 Shared task queue and local addresses are configured in `.env`.
 
@@ -65,7 +67,16 @@ Regenerate them after editing the schema:
 ./scripts/generate-proto.sh
 ```
 
-The web API uses the registry in `internal/workflows/registry.go` to discover each Workflow's concrete request and result types. Adding a Workflow requires one schema definition, one implementation, and one registry entry; it does not require a new HTTP handler. Activity timeouts, retries, and execution details remain owned by Workflow code.
+The web layer uses the registry in `internal/workflows/registry.go` to discover each Workflow's concrete request and result types. Adding a Workflow requires one schema definition, one implementation, and one registry entry; it does not require a new HTTP handler or new UI page. Activity timeouts, retries, and execution details remain owned by Workflow code.
+
+Useful routes:
+
+| Route | Purpose |
+| --- | --- |
+| `GET /` | Full page (templates + Alpine) |
+| `POST /runs` | Start a Workflow and return an HTML result card (HTMX) |
+| `GET /api/workflows` | JSON catalog |
+| `POST /api/workflows/run` | JSON run (same execution path as `/runs`) |
 
 Only run one local worker against the `orchestration` task queue. Old workers with stale Workflow signatures can consume tasks and produce payload-decoding failures.
 

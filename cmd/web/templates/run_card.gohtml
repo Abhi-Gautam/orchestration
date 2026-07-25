@@ -1,0 +1,51 @@
+<article class="card result-card result-{{.StatusKind}}" tabindex="-1">
+  <div class="result-header">
+    <div>
+      <p class="section-kicker">Run</p>
+      <h2>Run details</h2>
+    </div>
+    <span class="status-badge status-{{.StatusKind}}">{{.Status}}</span>
+  </div>
+
+  <p class="result-message" role="status">{{.Message}}</p>
+
+  <dl class="metadata-grid">
+    <div>
+      <dt>Elapsed</dt>
+      <dd>{{.Elapsed}}</dd>
+    </div>
+    <div>
+      <dt>Workflow</dt>
+      <dd>{{.Workflow}}</dd>
+    </div>
+    <div>
+      <dt>Workflow ID</dt>
+      <dd class="monospace">{{.WorkflowID}}</dd>
+    </div>
+    <div>
+      <dt>Run ID</dt>
+      <dd class="monospace">{{.RunID}}</dd>
+    </div>
+    <div>
+      <dt>Started</dt>
+      <dd>{{.StartedAt}}</dd>
+    </div>
+    <div>
+      <dt>Finished</dt>
+      <dd>{{.FinishedAt}}</dd>
+    </div>
+  </dl>
+
+  {{if .HasTemporalUI}}
+  <a class="temporal-link" href="{{.TemporalUIURL}}" target="_blank" rel="noopener noreferrer">
+    Open this run in Temporal UI <span aria-hidden="true">↗</span>
+  </a>
+  {{end}}
+
+  {{if .HasOutput}}
+  <div class="output-block">
+    <h3>{{.OutputHeading}}</h3>
+    <pre tabindex="0">{{.OutputPretty}}</pre>
+  </div>
+  {{end}}
+</article>

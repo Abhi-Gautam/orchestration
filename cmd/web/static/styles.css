@@ -466,8 +466,27 @@ textarea:disabled {
   50% { opacity: 1; transform: scale(1); }
 }
 
+.runs-section {
+  display: grid;
+  gap: 14px;
+}
+
+.runs-heading {
+  margin-bottom: 0;
+  padding: 0 2px;
+}
+
+.runs-stack {
+  display: grid;
+  gap: 14px;
+}
+
 .result-card {
   border-top: 3px solid var(--border-strong);
+}
+
+.result-card.result-pending {
+  border-top-color: var(--warning);
 }
 
 .result-card.result-success {
