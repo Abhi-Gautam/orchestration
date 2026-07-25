@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -57,14 +56,7 @@ func (s *server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, response)
 }
-func decodeInput(raw json.RawMessage, dest any) error {
-	decoder := json.NewDecoder(strings.NewReader(string(raw)))
-	decoder.DisallowUnknownFields()
-	if err := decodeOne(decoder, dest); err != nil {
-		return &inputError{message: fmt.Sprintf("Invalid workflow input: %s", sanitizeDecodeError(err))}
-	}
-	return nil
-}
+
 func decodeOne(decoder *json.Decoder, dest any) error {
 	if err := decoder.Decode(dest); err != nil {
 		return err
@@ -84,14 +76,7 @@ func sanitizeDecodeError(err error) string {
 	}
 	return msg
 }
-func jsonHasField(raw json.RawMessage, field string) bool {
-	var object map[string]json.RawMessage
-	if json.Unmarshal(raw, &object) != nil {
-		return false
-	}
-	_, ok := object[field]
-	return ok
-}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)

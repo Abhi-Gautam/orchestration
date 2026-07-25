@@ -1,0 +1,154 @@
+syntax = "proto3";
+
+package orchestration.v1;
+
+option go_package = "orchestration/gen/orchestration/v1;orchestrationv1";
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+message GreetingRequest {
+  string name = 1;
+}
+
+message GreetingResult {
+  string greeting = 1;
+}
+
+message WaitResult {
+  string name = 1;
+  int32 attempt = 2;
+  google.protobuf.Timestamp started_at = 3;
+  google.protobuf.Timestamp finished_at = 4;
+  google.protobuf.Duration elapsed = 5;
+}
+
+message SimpleDiamondRequest {
+  google.protobuf.Duration prepare_duration = 1;
+  google.protobuf.Duration branch_a_duration = 2;
+  google.protobuf.Duration branch_b_duration = 3;
+  google.protobuf.Duration finalize_duration = 4;
+}
+
+message SimpleDiamondResult {
+  google.protobuf.Timestamp started_at = 1;
+  google.protobuf.Timestamp finished_at = 2;
+  google.protobuf.Duration elapsed = 3;
+  repeated WaitResult nodes = 4;
+}
+
+message DynamicFanOutRequest {
+  int32 requested_count = 1;
+  google.protobuf.Duration branch_duration = 2;
+  google.protobuf.Duration finalize_duration = 3;
+}
+
+message DynamicFanOutResult {
+  int32 planned_count = 1;
+  int32 completed_count = 2;
+  google.protobuf.Timestamp started_at = 3;
+  google.protobuf.Timestamp finished_at = 4;
+  google.protobuf.Duration elapsed = 5;
+  google.protobuf.Timestamp first_branch_started_at = 6;
+  google.protobuf.Timestamp last_branch_finished_at = 7;
+  int32 peak_concurrent_branches = 8;
+  WaitResult finalize = 9;
+}
+
+enum AggregationPolicy {
+  AGGREGATION_POLICY_UNSPECIFIED = 0;
+  AGGREGATION_POLICY_FAIL_FAST = 1;
+  AGGREGATION_POLICY_ALL_SETTLED = 2;
+  AGGREGATION_POLICY_ALL_SETTLED_THEN_FAIL = 3;
+}
+
+enum FaultMode {
+  FAULT_MODE_UNSPECIFIED = 0;
+  FAULT_MODE_SUCCESS = 1;
+  FAULT_MODE_RETRYABLE_FAILURE = 2;
+  FAULT_MODE_NON_RETRYABLE_FAILURE = 3;
+  FAULT_MODE_PANIC = 4;
+  FAULT_MODE_START_TO_CLOSE_TIMEOUT = 5;
+  FAULT_MODE_HEARTBEAT_TIMEOUT = 6;
+  FAULT_MODE_WAIT_FOR_CANCELLATION = 7;
+}
+
+message FaultBranchSpec {
+  string name = 1;
+  FaultMode mode = 2;
+  google.protobuf.Duration work_duration = 3;
+  google.protobuf.Duration stall_duration = 4;
+  int32 fail_until_attempt = 5;
+  int64 seed = 6;
+  google.protobuf.Duration heartbeat_interval = 7;
+}
+
+message FanOutPolicyRequest {
+  AggregationPolicy policy = 1;
+  repeated FaultBranchSpec branches = 2;
+  google.protobuf.Duration finalize_duration = 3;
+}
+
+enum ActivityFailureKind {
+  ACTIVITY_FAILURE_KIND_UNSPECIFIED = 0;
+  ACTIVITY_FAILURE_KIND_APPLICATION = 1;
+  ACTIVITY_FAILURE_KIND_TIMEOUT = 2;
+  ACTIVITY_FAILURE_KIND_CANCELED = 3;
+  ACTIVITY_FAILURE_KIND_PANIC = 4;
+  ACTIVITY_FAILURE_KIND_UNKNOWN = 5;
+}
+
+message ActivityFailure {
+  ActivityFailureKind kind = 1;
+  string message = 2;
+  string type = 3;
+  bool non_retryable = 4;
+  string timeout_type = 5;
+}
+
+message FaultActivityResult {
+  string name = 1;
+  FaultMode outcome = 2;
+  int32 attempt = 3;
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp finished_at = 5;
+  google.protobuf.Duration elapsed = 6;
+}
+
+message ActivityOutcome {
+  string activity_id = 1;
+  int32 index = 2;
+  FaultActivityResult result = 3;
+  ActivityFailure failure = 4;
+}
+
+message FanOutPolicyResult {
+  AggregationPolicy policy = 1;
+  int32 planned = 2;
+  int32 succeeded = 3;
+  int32 failed = 4;
+  int32 canceled = 5;
+  repeated ActivityOutcome outcomes = 6;
+  WaitResult finalize = 7;
+  google.protobuf.Timestamp started_at = 8;
+  google.protobuf.Timestamp finished_at = 9;
+  google.protobuf.Duration elapsed = 10;
+}
+
+enum FailureCategory {
+  FAILURE_CATEGORY_UNSPECIFIED = 0;
+  FAILURE_CATEGORY_VALIDATION = 1;
+  FAILURE_CATEGORY_BUSINESS = 2;
+  FAILURE_CATEGORY_DEPENDENCY = 3;
+  FAILURE_CATEGORY_TIMEOUT = 4;
+  FAILURE_CATEGORY_CANCELED = 5;
+  FAILURE_CATEGORY_INTERNAL = 6;
+}
+
+message WorkflowFailure {
+  string code = 1;
+  string message = 2;
+  FailureCategory category = 3;
+  bool retryable = 4;
+  map<string, string> metadata = 5;
+}

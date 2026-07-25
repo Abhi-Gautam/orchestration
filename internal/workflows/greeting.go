@@ -6,28 +6,28 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
+	orchestrationv1 "orchestration/gen/orchestration/v1"
 	"orchestration/internal/activities"
 )
 
 const GreetingWorkflowName = "GreetingWorkflow"
 
-type GreetingInput struct {
-	Name string
-}
+func GreetingWorkflow(ctx workflow.Context, input *orchestrationv1.GreetingRequest) (*orchestrationv1.GreetingResult, error) {
+	if input == nil || input.Name == "" {
+		return nil, invalidRequest("INVALID_GREETING_REQUEST", "name is required")
+	}
 
-func GreetingWorkflow(ctx workflow.Context, input GreetingInput) (string, error) {
-	options := workflow.ActivityOptions{
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
 			MaximumAttempts: 3,
 		},
-	}
-	ctx = workflow.WithActivityOptions(ctx, options)
+	})
 
 	var greeting string
 	if err := workflow.ExecuteActivity(ctx, activities.FormatGreeting, input.Name).Get(ctx, &greeting); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return greeting, nil
+	return &orchestrationv1.GreetingResult{Greeting: greeting}, nil
 }

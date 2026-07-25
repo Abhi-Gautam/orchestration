@@ -6,11 +6,10 @@ import (
 )
 
 type catalogWorkflow struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	Description  string         `json:"description"`
-	ExampleInput map[string]any `json:"exampleInput"`
-	workflowName string
+	ID           string          `json:"id"`
+	Name         string          `json:"name"`
+	Description  string          `json:"description"`
+	ExampleInput json.RawMessage `json:"exampleInput"`
 }
 
 type catalogResponse struct {
@@ -23,21 +22,16 @@ type runRequest struct {
 }
 
 type runResponse struct {
-	Workflow      string    `json:"workflow"`
-	Status        string    `json:"status"`
-	WorkflowID    string    `json:"workflowId"`
-	RunID         string    `json:"runId"`
-	StartedAt     time.Time `json:"startedAt"`
-	FinishedAt    time.Time `json:"finishedAt"`
-	Elapsed       string    `json:"elapsed"`
-	TemporalUIURL string    `json:"temporalUiUrl"`
-	Result        any       `json:"result,omitempty"`
-	Failure       *failure  `json:"failure,omitempty"`
-}
-
-type failure struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
+	Workflow      string          `json:"workflow"`
+	Status        string          `json:"status"`
+	WorkflowID    string          `json:"workflowId"`
+	RunID         string          `json:"runId"`
+	StartedAt     time.Time       `json:"startedAt"`
+	FinishedAt    time.Time       `json:"finishedAt"`
+	Elapsed       string          `json:"elapsed"`
+	TemporalUIURL string          `json:"temporalUiUrl"`
+	Result        json.RawMessage `json:"result,omitempty"`
+	Failure       json.RawMessage `json:"failure,omitempty"`
 }
 
 type errorResponse struct {

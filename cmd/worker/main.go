@@ -29,10 +29,9 @@ func main() {
 	defer c.Close()
 
 	w := worker.New(c, taskQueue, worker.Options{})
-	w.RegisterWorkflowWithOptions(workflows.GreetingWorkflow, workflow.RegisterOptions{Name: workflows.GreetingWorkflowName})
-	w.RegisterWorkflowWithOptions(workflows.SimpleDiamondWorkflow, workflow.RegisterOptions{Name: workflows.SimpleDiamondWorkflowName})
-	w.RegisterWorkflowWithOptions(workflows.DynamicFanOutWorkflow, workflow.RegisterOptions{Name: workflows.DynamicFanOutWorkflowName})
-	w.RegisterWorkflowWithOptions(workflows.FanOutPolicyWorkflow, workflow.RegisterOptions{Name: workflows.FanOutPolicyWorkflowName})
+	for _, definition := range workflows.Definitions() {
+		w.RegisterWorkflowWithOptions(definition.Workflow, workflow.RegisterOptions{Name: definition.TemporalName})
+	}
 	w.RegisterActivity(activities.FormatGreeting)
 	w.RegisterActivity(activities.WaitActivity)
 	w.RegisterActivity(activities.PlanFanOutActivity)
