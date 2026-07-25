@@ -11,7 +11,11 @@ import (
 
 const GreetingWorkflowName = "GreetingWorkflow"
 
-func GreetingWorkflow(ctx workflow.Context, name string) (string, error) {
+type GreetingInput struct {
+	Name string
+}
+
+func GreetingWorkflow(ctx workflow.Context, input GreetingInput) (string, error) {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -21,7 +25,7 @@ func GreetingWorkflow(ctx workflow.Context, name string) (string, error) {
 	ctx = workflow.WithActivityOptions(ctx, options)
 
 	var greeting string
-	if err := workflow.ExecuteActivity(ctx, activities.FormatGreeting, name).Get(ctx, &greeting); err != nil {
+	if err := workflow.ExecuteActivity(ctx, activities.FormatGreeting, input.Name).Get(ctx, &greeting); err != nil {
 		return "", err
 	}
 
