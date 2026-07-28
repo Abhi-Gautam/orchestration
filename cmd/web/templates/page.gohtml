@@ -102,9 +102,99 @@
 
           <p class="workflow-description" x-text="selectedDescription"></p>
 
+          <fieldset
+            class="fan-out-controls"
+            x-show="selectedId === 'fan-out-policy'"
+            aria-describedby="fan-out-controls-help payload-error"
+          >
+            <legend>Fan-out experiment</legend>
+            <p id="fan-out-controls-help" class="field-help fan-out-controls-help">
+              Configure one deterministic campaign for up to 1,000 Activities, then compare how each aggregation policy handles it.
+            </p>
+
+            <div class="fan-out-control-grid">
+              <label class="control-field" for="fan-out-policy-select">
+                <span>Policy</span>
+                <select
+                  id="fan-out-policy-select"
+                  x-model="fanOut.policy"
+                  @change="syncFanOutPayload()"
+                >
+                  <option value="AGGREGATION_POLICY_FAIL_FAST">Fail fast</option>
+                  <option value="AGGREGATION_POLICY_ALL_SETTLED">All settled</option>
+                  <option value="AGGREGATION_POLICY_ALL_SETTLED_THEN_FAIL">All settled, then fail</option>
+                </select>
+              </label>
+
+              <label class="control-field" for="fan-out-campaign-select">
+                <span>Campaign</span>
+                <select
+                  id="fan-out-campaign-select"
+                  x-model="fanOut.campaignType"
+                  @change="syncFanOutPayload()"
+                >
+                  <option value="FAULT_CAMPAIGN_TYPE_ALL_SUCCESS_V1">All success V1</option>
+                  <option value="FAULT_CAMPAIGN_TYPE_MIXED_V1">Mixed V1</option>
+                </select>
+              </label>
+
+              <label class="control-field" for="fan-out-activity-count">
+                <span>Activity count</span>
+                <input
+                  id="fan-out-activity-count"
+                  type="number"
+                  step="1"
+                  :min="fanOut.campaignType === 'FAULT_CAMPAIGN_TYPE_MIXED_V1' ? 6 : 1"
+                  max="1000"
+                  inputmode="numeric"
+                  x-model="fanOut.activityCount"
+                  @input="syncFanOutPayload()"
+                >
+              </label>
+
+              <label class="control-field" for="fan-out-seed">
+                <span>Seed</span>
+                <input
+                  id="fan-out-seed"
+                  type="text"
+                  inputmode="numeric"
+                  spellcheck="false"
+                  autocomplete="off"
+                  x-model="fanOut.seed"
+                  @input="syncFanOutPayload()"
+                >
+              </label>
+            </div>
+
+            <fieldset
+              class="probability-controls"
+              x-show="fanOut.campaignType === 'FAULT_CAMPAIGN_TYPE_MIXED_V1'"
+            >
+              <legend>Background probabilities</legend>
+              <div class="probability-control-grid">
+                <template x-for="field in fanOutProbabilityFields" :key="field.key">
+                  <label class="control-field" :for="`fan-out-probability-${field.key}`">
+                    <span x-text="field.label"></span>
+                    <input
+                      :id="`fan-out-probability-${field.key}`"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      inputmode="numeric"
+                      x-model="fanOut.probabilities[field.key]"
+                      @input="syncFanOutPayload()"
+                    >
+                  </label>
+                </template>
+              </div>
+              <p class="field-help">All six values must be whole numbers totaling 100.</p>
+            </fieldset>
+          </fieldset>
+
           <div class="field-group">
             <div class="label-row">
-              <label for="payload-input">Input payload</label>
+              <label for="payload-input" x-text="selectedId === 'fan-out-policy' ? 'Payload preview / editor' : 'Input payload'"></label>
               <span>JSON</span>
             </div>
             <textarea
@@ -115,18 +205,33 @@
               autocapitalize="off"
               autocomplete="off"
               x-model="payload"
+              @input="payloadError = ''"
               :aria-invalid="payloadError ? 'true' : 'false'"
               aria-describedby="payload-help payload-error"
             ></textarea>
-            <p id="payload-help" class="field-help">
-              Edit the example input, then run. You can start another run while earlier ones are still in flight.
-            </p>
+            <p
+              id="payload-help"
+              class="field-help"
+              x-text="selectedId === 'fan-out-policy'
+                ? 'The controls update this protobuf JSON preview. Raw edits are applied back to the controls after validation when a run starts.'
+                : 'Edit the example input, then run. You can start another run while earlier ones are still in flight.'"
+            ></p>
             <p id="payload-error" class="field-error" role="alert" x-show="payloadError" x-text="payloadError"></p>
           </div>
 
           <div class="run-actions">
             <button class="button button-primary" type="submit">
               Run workflow
+            </button>
+            <button
+              class="button button-secondary"
+              type="button"
+              x-show="selectedId === 'fan-out-policy'"
+              :disabled="startingMatrix"
+              @click="runAllPolicies()"
+              x-text="startingMatrix ? 'Starting policies…' : 'Run all three policies'"
+            >
+              Run all three policies
             </button>
             <div class="running-indicator" role="status" aria-live="polite" x-show="activeRuns.length + starting > 0">
               <span class="activity-dot" aria-hidden="true"></span>
@@ -207,6 +312,39 @@
 
     function workflowLab() {
       const activeRunsStorageKey = "temporal-workflow-lab.active-runs.v1";
+      const fanOutPolicies = [
+        "AGGREGATION_POLICY_FAIL_FAST",
+        "AGGREGATION_POLICY_ALL_SETTLED",
+        "AGGREGATION_POLICY_ALL_SETTLED_THEN_FAIL",
+      ];
+      const fanOutCampaigns = [
+        "FAULT_CAMPAIGN_TYPE_ALL_SUCCESS_V1",
+        "FAULT_CAMPAIGN_TYPE_MIXED_V1",
+      ];
+      const fanOutProbabilityFields = [
+        { key: "success", label: "Success" },
+        { key: "retryableFailure", label: "Retryable failure" },
+        { key: "nonRetryableFailure", label: "Non-retryable failure" },
+        { key: "panic", label: "Panic" },
+        { key: "startToCloseTimeout", label: "Start-to-close timeout" },
+        { key: "heartbeatTimeout", label: "Heartbeat timeout" },
+      ];
+      const defaultFanOutInput = () => ({
+        policy: "AGGREGATION_POLICY_ALL_SETTLED",
+        campaign: {
+          type: "FAULT_CAMPAIGN_TYPE_MIXED_V1",
+          activityCount: 1000,
+          seed: "4815162342",
+          backgroundProbabilities: {
+            success: 82,
+            retryableFailure: 8,
+            nonRetryableFailure: 3,
+            panic: 2,
+            startToCloseTimeout: 3,
+            heartbeatTimeout: 2,
+          },
+        },
+      });
       let workflows = [];
       try {
         workflows = JSON.parse(document.getElementById("workflow-catalog")?.textContent || "[]");
@@ -221,7 +359,23 @@
         selectedDescription: "",
         payload: "{\n}",
         payloadError: "",
+        fanOut: {
+          policy: "AGGREGATION_POLICY_ALL_SETTLED",
+          campaignType: "FAULT_CAMPAIGN_TYPE_MIXED_V1",
+          activityCount: "1000",
+          seed: "4815162342",
+          probabilities: {
+            success: "82",
+            retryableFailure: "8",
+            nonRetryableFailure: "3",
+            panic: "2",
+            startToCloseTimeout: "3",
+            heartbeatTimeout: "2",
+          },
+        },
+        fanOutProbabilityFields,
         starting: 0,
+        startingMatrix: false,
         activeRuns: [],
         hasCompletedRuns: false,
         refreshing: false,
@@ -262,8 +416,153 @@
           this.selectedId = workflow.id;
           this.selectedName = workflow.name;
           this.selectedDescription = workflow.description || "No description provided.";
-          this.payload = JSON.stringify(workflow.exampleInput ?? {}, null, 2);
-          this.payloadError = "";
+          if (workflow.id === "fan-out-policy") {
+            try {
+              this.applyFanOutInput(workflow.exampleInput);
+            } catch (_) {
+              this.applyFanOutInput(defaultFanOutInput());
+            }
+            this.syncFanOutPayload();
+          } else {
+            this.payload = JSON.stringify(workflow.exampleInput ?? {}, null, 2);
+            this.payloadError = "";
+          }
+        },
+
+        fanOutInputFromControls() {
+          const campaign = {
+            type: this.fanOut.campaignType,
+            activityCount: this.fanOut.activityCount === "" ? 0 : Number(this.fanOut.activityCount),
+            seed: String(this.fanOut.seed),
+          };
+          if (campaign.type === "FAULT_CAMPAIGN_TYPE_MIXED_V1") {
+            campaign.backgroundProbabilities = Object.fromEntries(
+              fanOutProbabilityFields.map(({ key }) => [
+                key,
+                this.fanOut.probabilities[key] === "" ? 0 : Number(this.fanOut.probabilities[key]),
+              ]),
+            );
+          }
+          return { policy: this.fanOut.policy, campaign };
+        },
+
+        normalizeFanOutInput(input) {
+          const requireObject = (value, label) => {
+            if (!value || typeof value !== "object" || Array.isArray(value)) {
+              throw new Error(`${label} must be a JSON object.`);
+            }
+          };
+          const requireOnlyKeys = (value, allowed, label) => {
+            const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
+            if (unexpected.length > 0) {
+              throw new Error(`${label} contains unsupported field ${JSON.stringify(unexpected[0])}.`);
+            }
+          };
+
+          requireObject(input, "The fan-out payload");
+          requireOnlyKeys(input, ["policy", "campaign"], "The fan-out payload");
+          if (!fanOutPolicies.includes(input.policy)) {
+            throw new Error("Choose a supported aggregation policy.");
+          }
+
+          const campaign = input.campaign;
+          requireObject(campaign, "Campaign");
+          requireOnlyKeys(campaign, ["type", "activityCount", "seed", "backgroundProbabilities"], "Campaign");
+          if (!fanOutCampaigns.includes(campaign.type)) {
+            throw new Error("Choose the all-success V1 or mixed V1 campaign.");
+          }
+
+          if (!Number.isInteger(campaign.activityCount)) {
+            throw new Error("Activity count must be a whole number.");
+          }
+          const minimumCount = campaign.type === "FAULT_CAMPAIGN_TYPE_MIXED_V1" ? 6 : 1;
+          if (campaign.activityCount < minimumCount || campaign.activityCount > 1000) {
+            throw new Error(`Activity count must be between ${minimumCount} and 1,000 for this campaign.`);
+          }
+
+          if (typeof campaign.seed !== "string" || !/^-?\d+$/.test(campaign.seed)) {
+            throw new Error("Seed must be a decimal integer encoded as a JSON string.");
+          }
+          const seed = BigInt(campaign.seed);
+          if (seed < -9223372036854775808n || seed > 9223372036854775807n) {
+            throw new Error("Seed must fit in a signed 64-bit integer.");
+          }
+
+          const normalizedCampaign = {
+            type: campaign.type,
+            activityCount: campaign.activityCount,
+            seed: campaign.seed,
+          };
+          if (campaign.type === "FAULT_CAMPAIGN_TYPE_ALL_SUCCESS_V1") {
+            if (Object.prototype.hasOwnProperty.call(campaign, "backgroundProbabilities")) {
+              throw new Error("All-success campaigns do not accept background probabilities.");
+            }
+          } else {
+            const probabilities = campaign.backgroundProbabilities;
+            requireObject(probabilities, "Background probabilities");
+            const probabilityKeys = fanOutProbabilityFields.map(({ key }) => key);
+            requireOnlyKeys(probabilities, probabilityKeys, "Background probabilities");
+            let total = 0;
+            for (const { key, label } of fanOutProbabilityFields) {
+              const value = probabilities[key];
+              if (!Number.isInteger(value) || value < 0) {
+                throw new Error(`${label} probability must be a non-negative whole number.`);
+              }
+              total += value;
+            }
+            if (total !== 100) {
+              throw new Error(`Mixed background probabilities must total 100; current total is ${total}.`);
+            }
+            normalizedCampaign.backgroundProbabilities = Object.fromEntries(
+              probabilityKeys.map((key) => [key, probabilities[key]]),
+            );
+          }
+
+          return { policy: input.policy, campaign: normalizedCampaign };
+        },
+
+        applyFanOutInput(input) {
+          const normalized = this.normalizeFanOutInput(input);
+          this.fanOut.policy = normalized.policy;
+          this.fanOut.campaignType = normalized.campaign.type;
+          this.fanOut.activityCount = String(normalized.campaign.activityCount);
+          this.fanOut.seed = normalized.campaign.seed;
+          const probabilities = normalized.campaign.backgroundProbabilities
+            ?? defaultFanOutInput().campaign.backgroundProbabilities;
+          for (const { key } of fanOutProbabilityFields) {
+            this.fanOut.probabilities[key] = String(probabilities[key]);
+          }
+          return normalized;
+        },
+
+        syncFanOutPayload() {
+          const input = this.fanOutInputFromControls();
+          this.payload = JSON.stringify(input, null, 2);
+          try {
+            this.normalizeFanOutInput(input);
+            this.payloadError = "";
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : "The configuration is invalid.";
+            this.payloadError = `Fan-out configuration: ${detail}`;
+          }
+        },
+
+        parseAndApplyFanOutPayload() {
+          const raw = this.payload.trim();
+          if (!raw) {
+            this.payloadError = "Enter a fan-out JSON payload before starting a run.";
+            return null;
+          }
+          try {
+            const normalized = this.applyFanOutInput(JSON.parse(raw));
+            this.payload = JSON.stringify(normalized, null, 2);
+            this.payloadError = "";
+            return normalized;
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : "The configuration is invalid.";
+            this.payloadError = `Fan-out configuration: ${detail}`;
+            return null;
+          }
         },
 
         async refreshCatalog() {
@@ -291,6 +590,11 @@
 
         onSubmit(event) {
           this.payloadError = "";
+          if (this.selectedId === "fan-out-policy") {
+            if (!this.parseAndApplyFanOutPayload()) event.preventDefault();
+            return;
+          }
+
           const raw = this.payload.trim();
           if (!raw) {
             event.preventDefault();
@@ -322,6 +626,59 @@
 
         onSendError() {
           this.payloadError = "The server could not be reached. Check your connection and try again.";
+        },
+
+        async runAllPolicies() {
+          if (this.selectedId !== "fan-out-policy" || this.startingMatrix) return;
+          const baseInput = this.parseAndApplyFanOutPayload();
+          if (!baseInput) return;
+
+          this.startingMatrix = true;
+          const failures = [];
+          let started = 0;
+          try {
+            for (const policy of fanOutPolicies) {
+              this.starting += 1;
+              try {
+                const input = {
+                  policy,
+                  campaign: JSON.parse(JSON.stringify(baseInput.campaign)),
+                };
+                const response = await fetch("/api/workflows/run", {
+                  method: "POST",
+                  headers: {
+                    Accept: "application/json",
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ workflow: "fan-out-policy", input }),
+                });
+                const body = await response.json().catch(() => null);
+                if (!response.ok) {
+                  throw new Error(body?.error || `The server returned HTTP ${response.status}.`);
+                }
+                if (!body?.workflowId || !body?.runId) {
+                  throw new Error("The server returned an incomplete run descriptor.");
+                }
+                this.registerRun(body);
+                started += 1;
+              } catch (error) {
+                const label = this.humanizeEnum(policy, "AGGREGATION_POLICY_") || policy;
+                const detail = error instanceof Error ? error.message : "The run could not be started.";
+                failures.push(`${label}: ${detail}`);
+              } finally {
+                this.starting = Math.max(0, this.starting - 1);
+              }
+            }
+          } finally {
+            this.startingMatrix = false;
+          }
+
+          if (failures.length > 0) {
+            const summary = started === 0
+              ? "No policy runs were started."
+              : `Started ${started} of 3 policy runs; already-started runs remain active.`;
+            this.payloadError = `${summary} ${failures.join(" ")}`;
+          }
         },
 
         registerRun(detail) {

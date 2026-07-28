@@ -75,13 +75,20 @@ func FindDefinition(id string) (Definition, bool) {
 }
 
 func fanOutPolicyExample() *orchestrationv1.FanOutPolicyRequest {
-	branches := make([]*orchestrationv1.FaultBranchSpec, 3)
-	for i := range branches {
-		mode := orchestrationv1.FaultMode_FAULT_MODE_SUCCESS
-		if i == 1 {
-			mode = orchestrationv1.FaultMode_FAULT_MODE_NON_RETRYABLE_FAILURE
-		}
-		branches[i] = &orchestrationv1.FaultBranchSpec{Name: []string{"branch-00", "branch-01", "branch-02"}[i], Mode: mode, WorkDuration: durationpb.New(time.Second), HeartbeatInterval: durationpb.New(100 * time.Millisecond)}
+	return &orchestrationv1.FanOutPolicyRequest{
+		Policy: orchestrationv1.AggregationPolicy_AGGREGATION_POLICY_ALL_SETTLED,
+		Campaign: &orchestrationv1.FaultCampaignSpec{
+			Type:          orchestrationv1.FaultCampaignType_FAULT_CAMPAIGN_TYPE_MIXED_V1,
+			ActivityCount: 1000,
+			Seed:          4815162342,
+			BackgroundProbabilities: &orchestrationv1.OutcomeProbabilities{
+				Success:             82,
+				RetryableFailure:    8,
+				NonRetryableFailure: 3,
+				Panic:               2,
+				StartToCloseTimeout: 3,
+				HeartbeatTimeout:    2,
+			},
+		},
 	}
-	return &orchestrationv1.FanOutPolicyRequest{Policy: orchestrationv1.AggregationPolicy_AGGREGATION_POLICY_ALL_SETTLED, Branches: branches, FinalizeDuration: durationpb.New(500 * time.Millisecond)}
 }

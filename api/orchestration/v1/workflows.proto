@@ -107,6 +107,28 @@ enum FaultMode {
   FAULT_MODE_WAIT_FOR_CANCELLATION = 7;
 }
 
+message OutcomeProbabilities {
+  int32 success = 1;
+  int32 retryable_failure = 2;
+  int32 non_retryable_failure = 3;
+  int32 panic = 4;
+  int32 start_to_close_timeout = 5;
+  int32 heartbeat_timeout = 6;
+}
+
+enum FaultCampaignType {
+  FAULT_CAMPAIGN_TYPE_UNSPECIFIED = 0;
+  FAULT_CAMPAIGN_TYPE_ALL_SUCCESS_V1 = 1;
+  FAULT_CAMPAIGN_TYPE_MIXED_V1 = 2;
+}
+
+message FaultCampaignSpec {
+  FaultCampaignType type = 1;
+  int32 activity_count = 2;
+  int64 seed = 3;
+  OutcomeProbabilities background_probabilities = 4;
+}
+
 message FaultBranchSpec {
   string name = 1;
   FaultMode mode = 2;
@@ -115,12 +137,15 @@ message FaultBranchSpec {
   int32 fail_until_attempt = 5;
   int64 seed = 6;
   google.protobuf.Duration heartbeat_interval = 7;
+  OutcomeProbabilities probabilities = 8;
 }
 
 message FanOutPolicyRequest {
   AggregationPolicy policy = 1;
   repeated FaultBranchSpec branches = 2;
-  google.protobuf.Duration finalize_duration = 3;
+  reserved 3;
+  reserved "finalize_duration";
+  FaultCampaignSpec campaign = 4;
 }
 
 enum ActivityFailureKind {
@@ -138,6 +163,7 @@ message ActivityFailure {
   string type = 3;
   bool non_retryable = 4;
   string timeout_type = 5;
+  int32 final_attempt = 6;
 }
 
 message FaultActivityResult {
@@ -156,17 +182,41 @@ message ActivityOutcome {
   ActivityFailure failure = 4;
 }
 
+message FanOutAggregate {
+  bool complete = 1;
+  int32 consumed_successful_outputs = 2;
+  string semantic_digest = 3;
+}
+
+message FanOutFailureBreakdown {
+  int32 retry_exhausted = 1;
+  int32 non_retryable = 2;
+  int32 panic = 3;
+  int32 start_to_close_timeout = 4;
+  int32 heartbeat_timeout = 5;
+  int32 canceled = 6;
+  int32 unknown = 7;
+}
+
 message FanOutPolicyResult {
   AggregationPolicy policy = 1;
   int32 planned = 2;
   int32 succeeded = 3;
   int32 failed = 4;
   int32 canceled = 5;
-  repeated ActivityOutcome outcomes = 6;
-  WaitResult finalize = 7;
+  reserved 6, 7;
+  reserved "outcomes", "finalize";
   google.protobuf.Timestamp started_at = 8;
   google.protobuf.Timestamp finished_at = 9;
   google.protobuf.Duration elapsed = 10;
+  FaultCampaignType campaign_type = 11;
+  int64 seed = 12;
+  int32 succeeded_first_attempt = 13;
+  int32 succeeded_after_retry = 14;
+  FanOutAggregate aggregate = 15;
+  FanOutFailureBreakdown failure_breakdown = 16;
+  repeated ActivityOutcome samples = 17;
+  ActivityOutcome fail_fast_trigger = 18;
 }
 
 enum FailureCategory {

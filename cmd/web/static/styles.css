@@ -46,12 +46,16 @@ body {
 }
 
 button,
+input,
+select,
 textarea {
   font: inherit;
 }
 
 button,
 a,
+input,
+select,
 textarea {
   outline-offset: 3px;
 }
@@ -321,6 +325,85 @@ h3 {
   margin-top: 6px;
 }
 
+.fan-out-controls,
+.probability-controls {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+}
+
+.fan-out-controls {
+  margin-bottom: 22px;
+  padding: 18px;
+  background: var(--surface-subtle);
+}
+
+.fan-out-controls > legend,
+.probability-controls > legend {
+  padding: 0 6px;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.fan-out-controls-help {
+  margin: 0 0 16px;
+}
+
+.fan-out-control-grid,
+.probability-control-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.fan-out-control-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.control-field {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.control-field > span {
+  color: #344154;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.control-field input,
+.control-field select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+}
+
+.control-field input:hover,
+.control-field select:hover {
+  border-color: #9ba8b8;
+}
+
+.control-field input:focus,
+.control-field select:focus {
+  border-color: var(--accent);
+}
+
+.probability-controls {
+  margin-top: 17px;
+  padding: 14px;
+  background: var(--surface);
+}
+
+.probability-control-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .label-row {
   margin-bottom: 8px;
 }
@@ -390,6 +473,7 @@ textarea:disabled {
   justify-content: flex-start;
   min-height: 42px;
   margin-top: 22px;
+  flex-wrap: wrap;
 }
 
 .button {
@@ -733,6 +817,22 @@ textarea:disabled {
 
   .selected-workflow-heading {
     display: block;
+  }
+
+  .fan-out-control-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .probability-control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fan-out-controls {
+    padding: 14px;
+  }
+
+  .probability-controls {
+    padding: 12px;
   }
 
   .code-label {
