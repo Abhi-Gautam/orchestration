@@ -51,7 +51,7 @@ Browser  →  cmd/web  →  Temporal Server  →  cmd/worker
 | `cmd/web` | Server-rendered UI (HTMX + Alpine) and Temporal client; no worker inside |
 | `cmd/worker` | The only Temporal worker process |
 
-The UI is plain HTML templates with **HTMX** (async form posts / partial swaps) and **Alpine.js** (selection state, concurrent in-flight run cards). Endpoints stay synchronous; the browser can run several `/runs` requests at once.
+The UI is plain HTML templates with **HTMX** (async workflow starts / partial swaps) and **Alpine.js** (selection state and live run reconciliation). Workflow starts return immediately, and one multiplexed **Server-Sent Events (SSE)** connection streams product-facing status snapshots for active runs.
 
 Shared task queue and local addresses are configured in `.env`.
 
@@ -74,9 +74,10 @@ Useful routes:
 | Route | Purpose |
 | --- | --- |
 | `GET /` | Full page (templates + Alpine) |
-| `POST /runs` | Start a Workflow and return an HTML result card (HTMX) |
+| `POST /runs` | Start a Workflow asynchronously and return an HTML pending card (`202 Accepted`) |
 | `GET /api/workflows` | JSON catalog |
-| `POST /api/workflows/run` | JSON run (same execution path as `/runs`) |
+| `POST /api/workflows/run` | Start a Workflow asynchronously and return JSON run metadata (`202 Accepted`) |
+| `GET /api/runs/events` | Multiplex live status and terminal results for active runs over SSE |
 
 Only run one local worker against the `orchestration` task queue. Old workers with stale Workflow signatures can consume tasks and produce payload-decoding failures.
 

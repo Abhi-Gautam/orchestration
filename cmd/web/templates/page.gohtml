@@ -86,8 +86,8 @@
           hx-disabled-elt="none"
           @submit="onSubmit($event)"
           @htmx:config-request="onConfigRequest($event)"
-          @htmx:before-request="onBeforeRequest($event)"
-          @htmx:after-request="onAfterRequest($event)"
+          @htmx:before-request="onBeforeRequest()"
+          @htmx:after-request="onAfterRequest()"
           @htmx:send-error="onSendError()"
         >
           <input type="hidden" name="workflow" :value="selectedId">
@@ -128,7 +128,7 @@
             <button class="button button-primary" type="submit">
               Run workflow
             </button>
-            <div class="running-indicator" role="status" aria-live="polite" x-show="inflight > 0">
+            <div class="running-indicator" role="status" aria-live="polite" x-show="activeRuns.length + starting > 0">
               <span class="activity-dot" aria-hidden="true"></span>
               <span x-text="inflightLabel"></span>
             </div>
@@ -145,46 +145,53 @@
           <button
             type="button"
             class="button button-secondary button-compact"
-            x-show="pending.length > 0 || hasCompletedRuns"
+            x-show="hasCompletedRuns"
             @click="clearCompleted()"
           >
             Clear completed
           </button>
         </div>
 
-        <div id="pending-runs" class="runs-stack">
-          <template x-for="run in pending" :key="run.id">
-            <article class="card result-card result-pending">
-              <div class="result-header">
-                <div>
-                  <p class="section-kicker">In flight</p>
-                  <h2 x-text="run.name"></h2>
-                </div>
-                <span class="status-badge status-warning">Running</span>
-              </div>
-              <p class="result-message">
-                Waiting for the server to finish this synchronous run…
-                <span class="running-time" x-text="formatElapsed(run.startedAt)"></span>
-              </p>
-              <dl class="metadata-grid">
-                <div>
-                  <dt>Workflow</dt>
-                  <dd class="monospace" x-text="run.workflowId"></dd>
-                </div>
-                <div>
-                  <dt>Client timer</dt>
-                  <dd x-text="formatElapsed(run.startedAt)"></dd>
-                </div>
-              </dl>
-            </article>
-          </template>
-        </div>
-
         <div id="runs-list" class="runs-stack"></div>
 
-        <div class="empty-state" x-show="pending.length === 0 && !hasCompletedRuns">
-          <p>No runs yet. Configure a workflow and click Run. Multiple runs can execute at once.</p>
+        <div class="empty-state" x-show="activeRuns.length === 0 && starting === 0 && !hasCompletedRuns">
+          <p>No runs yet. Configure a workflow and click Run. Live progress will appear here.</p>
         </div>
+
+        <template id="live-run-card-template">
+          <article class="card result-card result-pending" tabindex="-1" data-terminal="false" data-revision="0">
+            <div class="result-header">
+              <div>
+                <p class="section-kicker">In flight</p>
+                <h2 data-run-name></h2>
+              </div>
+              <span class="status-badge status-warning" data-run-status>Running</span>
+            </div>
+            <p class="result-message" role="status" data-run-message>The workflow is being monitored for progress.</p>
+            <div class="progress-block" data-run-progress>
+              <div class="progress-label">
+                <span data-run-step>Starting workflow</span>
+                <span data-run-percent>0%</span>
+              </div>
+              <progress max="100" value="0" data-run-progress-bar>0%</progress>
+            </div>
+            <dl class="metadata-grid">
+              <div><dt>Elapsed</dt><dd data-run-elapsed>0ms</dd></div>
+              <div><dt>Workflow</dt><dd data-run-workflow></dd></div>
+              <div><dt>Workflow ID</dt><dd class="monospace" data-run-workflow-id></dd></div>
+              <div><dt>Run ID</dt><dd class="monospace" data-run-id></dd></div>
+              <div><dt>Started</dt><dd data-run-started>—</dd></div>
+              <div><dt>Finished</dt><dd data-run-finished>—</dd></div>
+            </dl>
+            <a class="temporal-link" data-run-temporal-link target="_blank" rel="noopener noreferrer">
+              Open this run in Temporal UI <span aria-hidden="true">↗</span>
+            </a>
+            <div class="output-block" data-run-output-block hidden>
+              <h3 data-run-output-heading>Result</h3>
+              <pre tabindex="0" data-run-output></pre>
+            </div>
+          </article>
+        </template>
       </section>
     </div>
   </main>
@@ -199,6 +206,7 @@
     ];
 
     function workflowLab() {
+      const activeRunsStorageKey = "temporal-workflow-lab.active-runs.v1";
       let workflows = [];
       try {
         workflows = JSON.parse(document.getElementById("workflow-catalog")?.textContent || "[]");
@@ -213,29 +221,39 @@
         selectedDescription: "",
         payload: "{\n}",
         payloadError: "",
-        inflight: 0,
-        pending: [],
+        starting: 0,
+        activeRuns: [],
         hasCompletedRuns: false,
         refreshing: false,
         emptyCatalogMessage: "No workflows are currently available.",
-        now: performance.now(),
+        now: Date.now(),
         _timer: null,
+        _eventSource: null,
+        _runStartedHandler: null,
 
         get inflightLabel() {
-          return this.inflight === 1 ? "1 run in flight" : `${this.inflight} runs in flight`;
+          const count = this.activeRuns.length + this.starting;
+          return count === 1 ? "1 run in flight" : `${count} runs in flight`;
         },
 
         init() {
           if (this.workflows.length > 0) {
             this.selectById(this.workflows[0].id);
           }
+          this.activeRuns = this.loadActiveRuns();
+          this._runStartedHandler = (event) => this.registerRun(event.detail?.value ?? event.detail);
+          document.body.addEventListener("runStarted", this._runStartedHandler);
           this._timer = window.setInterval(() => {
-            this.now = performance.now();
-          }, 100);
+            this.now = Date.now();
+            this.updateElapsedTimes();
+          }, 250);
+          this.connectEvents();
         },
 
         destroy() {
           if (this._timer) window.clearInterval(this._timer);
+          if (this._eventSource) this._eventSource.close();
+          if (this._runStartedHandler) document.body.removeEventListener("runStarted", this._runStartedHandler);
         },
 
         selectById(id) {
@@ -293,47 +311,214 @@
           event.detail.parameters.input = this.payload;
         },
 
-        onBeforeRequest(event) {
-          const id = crypto.randomUUID();
-          this.inflight += 1;
-          this.pending.unshift({
-            id,
-            name: this.selectedName || this.selectedId,
-            workflowId: this.selectedId,
-            startedAt: performance.now(),
-          });
-          if (event.detail.xhr) {
-            event.detail.xhr.__pendingId = id;
-          }
+        onBeforeRequest() {
+          this.starting += 1;
         },
 
-        onAfterRequest(event) {
-          this.inflight = Math.max(0, this.inflight - 1);
-          const pendingId = event.detail.xhr && event.detail.xhr.__pendingId;
-          if (pendingId) {
-            this.pending = this.pending.filter((run) => run.id !== pendingId);
-          } else if (this.pending.length) {
-            this.pending.shift();
-          }
-          const list = document.getElementById("runs-list");
-          this.hasCompletedRuns = !!(list && list.children.length > 0);
+        onAfterRequest() {
+          this.starting = Math.max(0, this.starting - 1);
+          this.refreshCompletedState();
         },
 
         onSendError() {
           this.payloadError = "The server could not be reached. Check your connection and try again.";
         },
 
-        clearCompleted() {
-          const list = document.getElementById("runs-list");
-          if (list) list.replaceChildren();
-          this.hasCompletedRuns = false;
+        registerRun(detail) {
+          if (!detail || !detail.workflowId || !detail.runId) return;
+          const descriptor = {
+            workflow: detail.workflow,
+            workflowName: detail.workflowName || detail.workflow,
+            status: "running",
+            workflowId: detail.workflowId,
+            runId: detail.runId,
+            startedAt: detail.startedAt,
+            temporalUiUrl: detail.temporalUiUrl,
+          };
+          const key = this.runKey(descriptor);
+          this.activeRuns = [descriptor, ...this.activeRuns.filter((run) => this.runKey(run) !== key)].slice(0, 32);
+          this.persistActiveRuns();
+          this.ensureRunCard(descriptor);
+          this.connectEvents();
         },
 
-        formatElapsed(startedAt) {
-          const ms = this.now - startedAt;
+        connectEvents() {
+          if (this._eventSource) {
+            this._eventSource.close();
+            this._eventSource = null;
+          }
+          if (this.activeRuns.length === 0) return;
+
+          const url = new URL("/api/runs/events", window.location.origin);
+          for (const run of this.activeRuns.slice(0, 32)) {
+            url.searchParams.append("run", JSON.stringify(run));
+          }
+          const source = new EventSource(url);
+          source.addEventListener("run", (event) => this.applyRunEvent(JSON.parse(event.data)));
+          source.addEventListener("monitorError", (event) => this.applyMonitorError(JSON.parse(event.data)));
+          source.onerror = () => this.markStreamsReconnecting();
+          this._eventSource = source;
+        },
+
+        applyRunEvent(event) {
+          const card = this.ensureRunCard(event);
+          if (!card) return;
+          if (event.operationStatus) {
+            this.applyOperationStatus(card, event.operationStatus);
+          }
+          if (event.runResponse) {
+            this.applyTerminalResponse(card, event.runResponse);
+          }
+        },
+
+        applyOperationStatus(card, status) {
+          const revision = Number(status.revision || 0);
+          if (revision > 0 && Number(card.dataset.revision || 0) >= revision) return;
+          card.dataset.revision = String(revision);
+          card.querySelector("[data-run-status]").textContent = this.humanizeEnum(status.state, "OPERATION_STATE_") || "Running";
+          card.querySelector("[data-run-message]").textContent = status.message || "The workflow is running.";
+          card.querySelector("[data-run-step]").textContent = status.currentStep || status.phase || "Running";
+
+          const percent = Math.max(0, Math.min(100, Number(status.progress?.percent || 0)));
+          card.querySelector("[data-run-percent]").textContent = `${Math.round(percent)}%`;
+          const bar = card.querySelector("[data-run-progress-bar]");
+          bar.value = percent;
+          bar.textContent = `${Math.round(percent)}%`;
+        },
+
+        applyTerminalResponse(card, response) {
+          const succeeded = response.status === "completed";
+          card.dataset.terminal = "true";
+          card.classList.remove("result-pending", "result-warning", "result-success", "result-failure");
+          card.classList.add(succeeded ? "result-success" : "result-failure");
+
+          const badge = card.querySelector("[data-run-status]");
+          badge.className = `status-badge ${succeeded ? "status-success" : "status-failure"}`;
+          badge.textContent = succeeded ? "Completed" : "Failed";
+          card.querySelector("[data-run-message]").textContent = succeeded
+            ? "The workflow completed successfully."
+            : "The workflow did not complete successfully. Review the failure details below.";
+          card.querySelector("[data-run-step]").textContent = succeeded ? "Completed" : "Failed";
+          card.querySelector("[data-run-percent]").textContent = "100%";
+          card.querySelector("[data-run-progress-bar]").value = 100;
+          card.querySelector("[data-run-elapsed]").textContent = response.elapsed || "—";
+          card.querySelector("[data-run-finished]").textContent = this.formatDateTime(response.finishedAt);
+
+          const output = response.failure ?? response.result;
+          if (output != null) {
+            card.querySelector("[data-run-output-heading]").textContent = response.failure ? "Failure" : "Result";
+            card.querySelector("[data-run-output]").textContent = JSON.stringify(output, null, 2);
+            card.querySelector("[data-run-output-block]").hidden = false;
+          }
+
+          const key = `${response.workflowId}:${response.runId}`;
+          this.activeRuns = this.activeRuns.filter((run) => this.runKey(run) !== key);
+          this.persistActiveRuns();
+          this.refreshCompletedState();
+          if (this.activeRuns.length === 0 && this._eventSource) {
+            this._eventSource.close();
+            this._eventSource = null;
+          }
+        },
+
+        applyMonitorError(event) {
+          const card = this.ensureRunCard(event);
+          if (!card) return;
+          card.querySelector("[data-run-message]").textContent = event.error || "Live status is temporarily unavailable. Reconnecting…";
+        },
+
+        markStreamsReconnecting() {
+          for (const run of this.activeRuns) {
+            const card = document.getElementById(`run-${run.runId}`);
+            if (card && card.dataset.terminal !== "true") {
+              card.querySelector("[data-run-message]").textContent = "Live status is temporarily unavailable. Reconnecting…";
+            }
+          }
+        },
+
+        ensureRunCard(run) {
+          if (!run?.runId) return null;
+          let card = document.getElementById(`run-${run.runId}`);
+          if (card) return card;
+
+          const template = document.getElementById("live-run-card-template");
+          const fragment = template.content.cloneNode(true);
+          card = fragment.querySelector("article");
+          card.id = `run-${run.runId}`;
+          card.dataset.workflowId = run.workflowId;
+          card.dataset.runId = run.runId;
+          card.querySelector("[data-run-name]").textContent = run.workflowName || run.workflow;
+          card.querySelector("[data-run-workflow]").textContent = run.workflow;
+          card.querySelector("[data-run-workflow-id]").textContent = run.workflowId;
+          card.querySelector("[data-run-id]").textContent = run.runId;
+          card.querySelector("[data-run-started]").textContent = this.formatDateTime(run.startedAt);
+          const link = card.querySelector("[data-run-temporal-link]");
+          link.href = run.temporalUiUrl || "#";
+          document.getElementById("runs-list").prepend(fragment);
+          return document.getElementById(`run-${run.runId}`);
+        },
+
+        updateElapsedTimes() {
+          for (const run of this.activeRuns) {
+            const card = document.getElementById(`run-${run.runId}`);
+            if (!card || card.dataset.terminal === "true") continue;
+            const started = Date.parse(run.startedAt);
+            if (Number.isFinite(started)) {
+              card.querySelector("[data-run-elapsed]").textContent = this.formatElapsed(this.now - started);
+            }
+          }
+        },
+
+        clearCompleted() {
+          const list = document.getElementById("runs-list");
+          if (list) {
+            list.querySelectorAll('[data-terminal="true"], .error-card').forEach((card) => card.remove());
+          }
+          this.refreshCompletedState();
+        },
+
+        refreshCompletedState() {
+          const list = document.getElementById("runs-list");
+          this.hasCompletedRuns = !!list?.querySelector('[data-terminal="true"], .error-card');
+        },
+
+        runKey(run) {
+          return `${run.workflowId}:${run.runId}`;
+        },
+
+        loadActiveRuns() {
+          try {
+            const runs = JSON.parse(sessionStorage.getItem(activeRunsStorageKey) || "[]");
+            return Array.isArray(runs) ? runs.filter((run) => run.workflowId && run.runId).slice(0, 32) : [];
+          } catch (_) {
+            return [];
+          }
+        },
+
+        persistActiveRuns() {
+          sessionStorage.setItem(activeRunsStorageKey, JSON.stringify(this.activeRuns));
+        },
+
+        formatDateTime(value) {
+          const date = new Date(value);
+          return Number.isFinite(date.getTime()) ? date.toLocaleString() : "—";
+        },
+
+        humanizeEnum(value, prefix) {
+          return String(value || "")
+            .replace(prefix, "")
+            .toLowerCase()
+            .split("_")
+            .filter(Boolean)
+            .map((part) => part[0].toUpperCase() + part.slice(1))
+            .join(" ");
+        },
+
+        formatElapsed(ms) {
           if (!Number.isFinite(ms) || ms < 0) return "0ms";
           if (ms < 1000) return `${Math.round(ms)}ms`;
-          return `${(ms / 1000).toFixed(1)}s`;
+          if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+          return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
         },
       };
     }
