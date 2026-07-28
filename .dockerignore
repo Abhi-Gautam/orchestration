@@ -2,7 +2,7 @@
 .agents
 .tmp
 tmp
-Details.md
+
 coverage.out
 **/*_test.go
 docs

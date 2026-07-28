@@ -1,41 +1,64 @@
-# Workflow engine patterns with Temporal
+# Orchestration
 
-This repository explores the things a reliable workflow engine needs to get right. We are using Temporal and Go to research each topic, model an example, implement it, and verify the behavior.
+A Temporal-backed base for durable business operations and AI workflows. It provides compiled workflow discovery, asynchronous starts, product-facing status, SSE updates, structured failures, and a generic UI.
 
-## Topics
+This repository is currently a source-extension lab, not a runtime plugin platform. Adding a Workflow means changing and rebuilding this Go module.
 
-- Building static and runtime workflow DAGs
-- Sequential dependencies and conditional branches
-- Loops, polling, watchers, Signals, Updates, and timers
-- Activity and Child Workflow fan-out/fan-in
-- Concurrency limits, rate limits, fairness, and backpressure
-- Pause, resume, retry, reset, cancel, and terminate behavior
-- Failure propagation, fail-fast, best-effort, all-settled, and compensation policies
-- Retry semantics and idempotency boundaries
-- Workflow IDs, duplicate handling, shared work, and result coalescing
-- Long-running Activities, heartbeats, worker failure, and recovery
-- Progress reporting, metrics, tracing, memory use, and latency
-- Workflow, Activity, replay, integration, and end-to-end testing
-- Worker deployment, versioning, compatibility, and publishing new workflows
-- Schedules, external events, API triggers, and transactional outbox patterns
-- Dependencies between Workflows and Child Workflows
-- Long-lived user sessions and entity workflows
-- AI agent loops and comparison with LangGraph
-- User notifications and product-facing workflow state
-- Product UI boundaries versus Temporal UI and operator details
+## Run locally
 
-Topic notes and experiments live under `docs/topics/`.
+Prerequisites: Docker with Compose.
 
-## Architecture
+```sh
+cp .env.example .env
+docker compose up --build
+```
 
-There are exactly two application processes, plus Temporal from Compose:
+Open:
 
-The UI is plain HTML templates with **HTMX** (async workflow starts / partial swaps) and **Alpine.js** (selection state and live run reconciliation). Workflow starts return immediately, and one multiplexed **Server-Sent Events (SSE)** connection streams product-facing status snapshots for active runs.
+- Product UI: [http://localhost:8090](http://localhost:8090)
+- Temporal UI: [http://localhost:8234](http://localhost:8234)
 
-The web container never runs a Temporal worker. The worker container is the only worker for this lab.
+Select **Greeting**, keep the example input, and start the run. The product UI streams status while Temporal UI exposes the execution History.
 
-### Workflow contracts
+Stop the stack with:
 
-Top-level Workflow requests, results, and structured failures are defined once in `api/orchestration/v1/workflows.proto`. Generated Go types live under `gen/orchestration/v1` and are used by both `cmd/web` and `internal/workflows`.
+```sh
+docker compose down
+```
 
-The web layer uses the registry in `internal/workflows/registry.go` to discover each Workflow's concrete request and result types. Adding a Workflow requires one schema definition, one implementation, and one registry entry; it does not require a new HTTP handler or new UI page. Activity timeouts, retries, and execution details remain owned by Workflow code.
+## Runtime
+
+```mermaid
+flowchart TD
+    UI[Product UI] -->|HTTP and SSE| Web[Web process]
+    Web -->|Start, Query, History| Temporal[Temporal]
+    Worker[Worker process] -->|Poll task queue| Temporal
+    Temporal --> DB[(PostgreSQL)]
+    Worker --> Code[Compiled Workflows and Activities]
+```
+
+- `cmd/web` serves the UI and API. It is a Temporal client, not a Worker.
+- `cmd/worker` registers and executes all Workflows and Activities.
+- Temporal owns execution state and History.
+- PostgreSQL stores Temporal state; there is no application run database yet.
+- Protobuf defines top-level Workflow requests, results, status, and failures.
+
+## Documentation
+
+| Document | Use it when |
+|---|---|
+| [Architecture](docs/architecture.md) | You need the runtime boundaries and execution lifecycle |
+| [Adding a Workflow](docs/adding-a-workflow.md) | You are adding business Workflows and Activities |
+| [Execution semantics](docs/execution-semantics.md) | You need branching, fan-out, failure, or control behavior |
+| [Data and artifacts](docs/data-and-artifacts.md) | Work produces durable side effects or large outputs |
+| [HTTP API](docs/http-api.md) | You are building another API client or UI |
+
+## Current boundaries
+
+The supplied Compose stack is for local development. The project does not yet provide authentication, tenant isolation, a public extension SDK, dynamic Workflow installation, production deployment manifests, or user-facing control APIs such as cancel and retry.
+
+Run the Go checks with:
+
+```sh
+go test ./...
+```
