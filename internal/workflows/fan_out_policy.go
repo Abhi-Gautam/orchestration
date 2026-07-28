@@ -27,12 +27,22 @@ func FanOutPolicyWorkflow(ctx workflow.Context, input *orchestrationv1.FanOutPol
 		return nil, invalidRequest("INVALID_FAN_OUT_POLICY_REQUEST", err.Error())
 	}
 
+	finalizeDuration := duration(input.FinalizeDuration)
+	planned := int64(len(input.Branches))
+	if finalizeDuration > 0 {
+		planned++
+	}
+	status, err := newStatusTracker(ctx, "fan-out", "branches", "Running fan-out policy branches", operationProgress(planned, int64(len(input.Branches)), int64(len(input.Branches)), 0, 0, 0))
+	if err != nil {
+		return nil, err
+	}
+
 	startedAt := workflow.Now(ctx)
 	activityCtx, cancelActivities := workflow.WithCancel(ctx)
 	defer cancelActivities()
 
 	scheduled := scheduleFaultActivities(activityCtx, input.Branches)
-	result, err := aggregateFaultActivities(ctx, scheduled, input.Policy, cancelActivities)
+	result, err := aggregateFaultActivities(ctx, scheduled, input.Policy, cancelActivities, status, planned)
 	result.Policy = input.Policy
 	result.StartedAt = timestamppb.New(startedAt)
 	if err != nil {
@@ -40,7 +50,8 @@ func FanOutPolicyWorkflow(ctx workflow.Context, input *orchestrationv1.FanOutPol
 		return result, err
 	}
 
-	if finalizeDuration := duration(input.FinalizeDuration); finalizeDuration > 0 {
+	if finalizeDuration > 0 {
+		status.setRunning("finalizing", "finalize", "Finalizing fan-out policy", operationProgress(planned, planned, 1, int64(result.Succeeded), int64(result.Failed), int64(result.Canceled)))
 		var finalize activities.WaitResult
 		if err := scheduleWaitActivity(ctx, "finalize", finalizeDuration).Get(ctx, &finalize); err != nil {
 			return result, err
@@ -48,6 +59,11 @@ func FanOutPolicyWorkflow(ctx workflow.Context, input *orchestrationv1.FanOutPol
 		result.Finalize = waitResult(finalize)
 	}
 	finishFanOutResult(ctx, result, startedAt)
+	succeeded := int64(result.Succeeded)
+	if finalizeDuration > 0 {
+		succeeded++
+	}
+	status.setSucceeded("completed", "Fan-out policy completed", operationProgress(planned, planned, 0, succeeded, int64(result.Failed), int64(result.Canceled)))
 	return result, nil
 }
 
@@ -102,7 +118,7 @@ func scheduleFaultActivities(ctx workflow.Context, branches []*orchestrationv1.F
 	return scheduled
 }
 
-func aggregateFaultActivities(ctx workflow.Context, scheduled []scheduledActivity, policy orchestrationv1.AggregationPolicy, cancelActivities workflow.CancelFunc) (*orchestrationv1.FanOutPolicyResult, error) {
+func aggregateFaultActivities(ctx workflow.Context, scheduled []scheduledActivity, policy orchestrationv1.AggregationPolicy, cancelActivities workflow.CancelFunc, status *statusTracker, planned int64) (*orchestrationv1.FanOutPolicyResult, error) {
 	result := &orchestrationv1.FanOutPolicyResult{Planned: int32(len(scheduled)), Outcomes: make([]*orchestrationv1.ActivityOutcome, len(scheduled))}
 	selector := workflow.NewSelector(ctx)
 	remaining := len(scheduled)
@@ -129,6 +145,7 @@ func aggregateFaultActivities(ctx workflow.Context, scheduled []scheduledActivit
 			}
 			result.Outcomes[item.index] = outcome
 			remaining--
+			status.setRunning("fan-out", item.activityID, "Collecting fan-out policy outcomes", operationProgress(planned, int64(len(scheduled)), int64(remaining), int64(result.Succeeded), int64(result.Failed), int64(result.Canceled)))
 		})
 	}
 	for remaining > 0 {

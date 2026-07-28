@@ -34,6 +34,11 @@ func ConditionalBranchWorkflow(ctx workflow.Context, input *orchestrationv1.Cond
 		return nil, invalidRequest("INVALID_CONDITIONAL_BRANCH_REQUEST", "available_stock must not be negative")
 	}
 
+	status, err := newStatusTracker(ctx, "checking-inventory", "check-inventory", "Checking inventory", operationProgress(2, 1, 1, 0, 0, 0))
+	if err != nil {
+		return nil, err
+	}
+
 	startedAt := workflow.Now(ctx)
 	baseOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Second,
@@ -65,6 +70,7 @@ func ConditionalBranchWorkflow(ctx workflow.Context, input *orchestrationv1.Cond
 
 	// Conditional branch: exactly one of two different Activity types runs.
 	if inventory.InStock {
+		status.setRunning("fulfilling", "fulfill-order", "Fulfilling in-stock order", operationProgress(2, 2, 1, 1, 0, 0))
 		var fulfillment activities.FulfillOrderResult
 		fulfillCtx := workflow.WithActivityOptions(ctx, withActivityID(baseOptions, "fulfill-order"))
 		if err := workflow.ExecuteActivity(fulfillCtx, activities.FulfillOrder, activities.FulfillOrderInput{
@@ -80,6 +86,7 @@ func ConditionalBranchWorkflow(ctx workflow.Context, input *orchestrationv1.Cond
 			Status:     fulfillment.Status,
 		}
 	} else {
+		status.setRunning("backordering", "backorder-order", "Backordering out-of-stock order", operationProgress(2, 2, 1, 1, 0, 0))
 		shortfall := input.Quantity - inventory.AvailableStock
 		var backorder activities.BackorderOrderResult
 		backorderCtx := workflow.WithActivityOptions(ctx, withActivityID(baseOptions, "backorder-order"))
@@ -100,6 +107,7 @@ func ConditionalBranchWorkflow(ctx workflow.Context, input *orchestrationv1.Cond
 	}
 
 	finishedAt := workflow.Now(ctx)
+	status.setSucceeded("completed", "Conditional branch completed", operationProgress(2, 2, 0, 2, 0, 0))
 	result.StartedAt = timestamppb.New(startedAt)
 	result.FinishedAt = timestamppb.New(finishedAt)
 	result.Elapsed = durationpb.New(finishedAt.Sub(startedAt))

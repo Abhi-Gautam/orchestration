@@ -17,6 +17,11 @@ func GreetingWorkflow(ctx workflow.Context, input *orchestrationv1.GreetingReque
 		return nil, invalidRequest("INVALID_GREETING_REQUEST", "name is required")
 	}
 
+	status, err := newStatusTracker(ctx, "greeting", "format-greeting", "Formatting greeting", operationProgress(1, 1, 1, 0, 0, 0))
+	if err != nil {
+		return nil, err
+	}
+
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -29,5 +34,6 @@ func GreetingWorkflow(ctx workflow.Context, input *orchestrationv1.GreetingReque
 		return nil, err
 	}
 
+	status.setSucceeded("completed", "Greeting completed", operationProgress(1, 1, 0, 1, 0, 0))
 	return &orchestrationv1.GreetingResult{Greeting: greeting}, nil
 }
