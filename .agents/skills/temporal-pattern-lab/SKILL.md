@@ -1,6 +1,6 @@
 ---
 name: temporal-pattern-lab
-description: Discuss one small Temporal topic, agree on a use-case model, save that model as one Markdown file, then implement and verify it. Use for focused Temporal workflow-pattern learning and experiments in this repository.
+description: Discuss one small Temporal topic, agree on a use-case model then implement and verify it.
 ---
 
 # Temporal Pattern Lab
@@ -12,6 +12,7 @@ Work on one small topic at a time.
 Research and discuss the topic in chat.
 
 - Keep the question narrow enough for one focused example.
+- Aggree on a mock workflow first so discussion can be productive
 - Explain normal industry behavior and Temporal behavior only as needed.
 - Answer the user's questions before modeling.
 - Do not create research notes.
@@ -19,27 +20,6 @@ Research and discuss the topic in chat.
 - Do not move forward until the user agrees that the topic is understood.
 
 ## 2. Model
-
-After agreement, create one file:
-
-`docs/topics/<topic-slug>.md`
-
-Do not create a directory for the topic. The file contains only:
-
-```markdown
-# <Topic>
-
-## Use case
-
-## Model
-
-## Cases
-
-| Case | What happens | Expected result |
-|---|---|---|
-
-## Acceptance criteria
-```
 
 Keep the model small and concrete. Include only the use case, its components or flow, the cases being tested, what should happen in each case, and observable acceptance criteria.
 
@@ -50,8 +30,6 @@ Review the model in chat and wait for explicit approval before implementation.
 Implement exactly the approved model.
 
 - Keep code changes focused on the selected topic.
-- Add tests needed by the agreed cases.
-- Run formatting, tests, and the relevant Temporal stack.
 - Execute every agreed case.
 - Verify behavior through application output and the Temporal frontend/UI.
 - Report commands, Workflow IDs, Run IDs, UI links, and observed results in chat.
@@ -60,6 +38,4 @@ Implement exactly the approved model.
 
 ## 4. Review
 
-Do the explanation and grill session in chat using the model, code, tests, and actual Temporal history. Do not create another document.
-
-Do not automatically start the next topic.
+Do the explanation and grill session in chat using the model, code, tests, and actual Temporal history.
