@@ -1,6 +1,6 @@
 # Data and Artifacts
 
-> **Status:** Architecture rules; storage-backed artifacts are not implemented
+> **Status:** Architecture rules; reusable Activity artifacts are implemented for one RustFS-backed experiment
 
 Temporal is the execution control plane. It should carry commands, small values, status, and durable references—not become bulk object storage.
 
@@ -15,7 +15,7 @@ Temporal is the execution control plane. It should carry commands, small values,
 
 Anything needed by another Activity or a later retry must not exist only on local scratch.
 
-The repository does not currently include an application database, RustFS, or another object store. Those are future adapters, not supported features today.
+The local stack includes RustFS for the `ReusableArtifactWorkflow` experiment. An application database and general-purpose artifact adapters are not implemented.
 
 ## Reusable Activity results
 
@@ -27,6 +27,12 @@ Reuse is opt-in business behavior. At Activity entry:
 4. Return a compact record or artifact reference.
 
 A reusable identity should reflect tenant scope, immutable business inputs, output schema version, and implementation version. Workflow ID or Activity ID belongs in the key only when it is part of the business reuse boundary. Run ID, attempt number, and Worker Build ID usually should not invalidate retry reuse.
+
+## Current reusable-artifact experiment
+
+`ReusableArtifactWorkflow` runs five Activities with stable IDs. Each Activity looks up a RustFS object derived from Temporal namespace, Workflow ID, Activity ID, Activity type, and Activity version. Workflow Run ID, Activity attempt, and Worker Build ID are excluded.
+
+An existing object is reused immediately. A miss performs the configured heartbeating work and publishes the object before returning its compact reference. This experiment intentionally has no locking, retention policy, or automatic Activity-version generation.
 
 ## Failure windows
 
