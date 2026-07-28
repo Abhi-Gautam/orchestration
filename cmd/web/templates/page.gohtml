@@ -192,9 +192,87 @@
             </fieldset>
           </fieldset>
 
+          <fieldset
+            class="workflow-controls"
+            x-show="selectedId === 'reusable-artifacts'"
+            aria-describedby="reusable-artifact-controls-help payload-error"
+          >
+            <legend>Reusable artifact experiment</legend>
+            <p id="reusable-artifact-controls-help" class="field-help workflow-controls-help">
+              Run five parallel Activities. Reuse is determined by the stable Workflow ID, Activity IDs, and Activity version.
+            </p>
+
+            <div class="workflow-control-grid">
+              <label class="control-field" for="reusable-artifact-experiment-id">
+                <span>Experiment ID</span>
+                <input
+                  id="reusable-artifact-experiment-id"
+                  type="text"
+                  spellcheck="false"
+                  autocomplete="off"
+                  x-model="reusableArtifacts.experimentId"
+                  @input="syncReusableArtifactPayload()"
+                >
+              </label>
+
+              <label class="control-field" for="reusable-artifact-version">
+                <span>Activity version</span>
+                <input
+                  id="reusable-artifact-version"
+                  type="text"
+                  spellcheck="false"
+                  autocomplete="off"
+                  x-model="reusableArtifacts.activityVersion"
+                  @input="syncReusableArtifactPayload()"
+                >
+              </label>
+
+              <label class="control-field" for="reusable-artifact-duration">
+                <span>Heavy-work duration (seconds)</span>
+                <input
+                  id="reusable-artifact-duration"
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputmode="numeric"
+                  x-model="reusableArtifacts.heavyWorkSeconds"
+                  @input="syncReusableArtifactPayload()"
+                >
+              </label>
+
+              <label class="control-field" for="reusable-artifact-failure-case">
+                <span>Failure case</span>
+                <select
+                  id="reusable-artifact-failure-case"
+                  x-model="reusableArtifacts.failureCase"
+                  @change="syncReusableArtifactPayload()"
+                >
+                  <option value="REUSABLE_ARTIFACT_FAILURE_CASE_NONE">No fault</option>
+                  <option value="REUSABLE_ARTIFACT_FAILURE_CASE_BEFORE_PUBLICATION">Fail before publication</option>
+                  <option value="REUSABLE_ARTIFACT_FAILURE_CASE_AFTER_PUBLICATION">Fail after publication</option>
+                </select>
+              </label>
+
+              <label class="control-field" for="reusable-artifact-failure-target">
+                <span>Failure target Activity</span>
+                <select
+                  id="reusable-artifact-failure-target"
+                  x-model="reusableArtifacts.failureTargetActivity"
+                  @change="syncReusableArtifactPayload()"
+                >
+                  <option value="artifact-000">artifact-000</option>
+                  <option value="artifact-001">artifact-001</option>
+                  <option value="artifact-002">artifact-002</option>
+                  <option value="artifact-003">artifact-003</option>
+                  <option value="artifact-004">artifact-004</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+
           <div class="field-group">
             <div class="label-row">
-              <label for="payload-input" x-text="selectedId === 'fan-out-policy' ? 'Payload preview / editor' : 'Input payload'"></label>
+              <label for="payload-input" x-text="selectedId === 'fan-out-policy' || selectedId === 'reusable-artifacts' ? 'Payload preview / editor' : 'Input payload'"></label>
               <span>JSON</span>
             </div>
             <textarea
@@ -212,7 +290,7 @@
             <p
               id="payload-help"
               class="field-help"
-              x-text="selectedId === 'fan-out-policy'
+              x-text="selectedId === 'fan-out-policy' || selectedId === 'reusable-artifacts'
                 ? 'The controls update this protobuf JSON preview. Raw edits are applied back to the controls after validation when a run starts.'
                 : 'Edit the example input, then run. You can start another run while earlier ones are still in flight.'"
             ></p>
@@ -345,6 +423,25 @@
           },
         },
       });
+      const reusableArtifactFailureCases = [
+        "REUSABLE_ARTIFACT_FAILURE_CASE_NONE",
+        "REUSABLE_ARTIFACT_FAILURE_CASE_BEFORE_PUBLICATION",
+        "REUSABLE_ARTIFACT_FAILURE_CASE_AFTER_PUBLICATION",
+      ];
+      const reusableArtifactIDs = [
+        "artifact-000",
+        "artifact-001",
+        "artifact-002",
+        "artifact-003",
+        "artifact-004",
+      ];
+      const defaultReusableArtifactInput = () => ({
+        experimentId: "artifact-demo-001",
+        activityVersion: "v1",
+        heavyWorkDuration: "20s",
+        failureCase: "REUSABLE_ARTIFACT_FAILURE_CASE_NONE",
+        failureTargetActivity: "artifact-002",
+      });
       let workflows = [];
       try {
         workflows = JSON.parse(document.getElementById("workflow-catalog")?.textContent || "[]");
@@ -374,6 +471,13 @@
           },
         },
         fanOutProbabilityFields,
+        reusableArtifacts: {
+          experimentId: "artifact-demo-001",
+          activityVersion: "v1",
+          heavyWorkSeconds: "20",
+          failureCase: "REUSABLE_ARTIFACT_FAILURE_CASE_NONE",
+          failureTargetActivity: "artifact-002",
+        },
         starting: 0,
         startingMatrix: false,
         activeRuns: [],
@@ -423,6 +527,13 @@
               this.applyFanOutInput(defaultFanOutInput());
             }
             this.syncFanOutPayload();
+          } else if (workflow.id === "reusable-artifacts") {
+            try {
+              this.applyReusableArtifactInput(workflow.exampleInput);
+            } catch (_) {
+              this.applyReusableArtifactInput(defaultReusableArtifactInput());
+            }
+            this.syncReusableArtifactPayload();
           } else {
             this.payload = JSON.stringify(workflow.exampleInput ?? {}, null, 2);
             this.payloadError = "";
@@ -565,6 +676,89 @@
           }
         },
 
+        reusableArtifactInputFromControls() {
+          return {
+            experimentId: this.reusableArtifacts.experimentId,
+            activityVersion: this.reusableArtifacts.activityVersion,
+            heavyWorkDuration: `${this.reusableArtifacts.heavyWorkSeconds}s`,
+            failureCase: this.reusableArtifacts.failureCase,
+            failureTargetActivity: this.reusableArtifacts.failureTargetActivity,
+          };
+        },
+
+        normalizeReusableArtifactInput(input) {
+          if (!input || typeof input !== "object" || Array.isArray(input)) {
+            throw new Error("The reusable artifact payload must be a JSON object.");
+          }
+          const allowed = ["experimentId", "activityVersion", "heavyWorkDuration", "failureCase", "failureTargetActivity"];
+          const unexpected = Object.keys(input).filter((key) => !allowed.includes(key));
+          if (unexpected.length > 0) {
+            throw new Error(`The reusable artifact payload contains unsupported field ${JSON.stringify(unexpected[0])}.`);
+          }
+          if (typeof input.experimentId !== "string" || !/^[A-Za-z0-9._-]{1,128}$/.test(input.experimentId)) {
+            throw new Error("Experiment ID must be 1-128 characters using letters, numbers, dot, underscore, or hyphen.");
+          }
+          if (typeof input.activityVersion !== "string" || input.activityVersion.length === 0 || input.activityVersion.trim() !== input.activityVersion) {
+            throw new Error("Activity version is required and must not have surrounding whitespace.");
+          }
+          if (typeof input.heavyWorkDuration !== "string" || !/^[1-9][0-9]*s$/.test(input.heavyWorkDuration)) {
+            throw new Error("Heavy-work duration must be a positive whole number of seconds, such as 20s.");
+          }
+          if (!reusableArtifactFailureCases.includes(input.failureCase)) {
+            throw new Error("Choose no fault, failure before publication, or failure after publication.");
+          }
+          if (!reusableArtifactIDs.includes(input.failureTargetActivity)) {
+            throw new Error("Failure target must be one of artifact-000 through artifact-004.");
+          }
+          return {
+            experimentId: input.experimentId,
+            activityVersion: input.activityVersion,
+            heavyWorkDuration: input.heavyWorkDuration,
+            failureCase: input.failureCase,
+            failureTargetActivity: input.failureTargetActivity,
+          };
+        },
+
+        applyReusableArtifactInput(input) {
+          const normalized = this.normalizeReusableArtifactInput(input);
+          this.reusableArtifacts.experimentId = normalized.experimentId;
+          this.reusableArtifacts.activityVersion = normalized.activityVersion;
+          this.reusableArtifacts.heavyWorkSeconds = normalized.heavyWorkDuration.slice(0, -1);
+          this.reusableArtifacts.failureCase = normalized.failureCase;
+          this.reusableArtifacts.failureTargetActivity = normalized.failureTargetActivity;
+          return normalized;
+        },
+
+        syncReusableArtifactPayload() {
+          const input = this.reusableArtifactInputFromControls();
+          this.payload = JSON.stringify(input, null, 2);
+          try {
+            this.normalizeReusableArtifactInput(input);
+            this.payloadError = "";
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : "The configuration is invalid.";
+            this.payloadError = `Reusable artifact configuration: ${detail}`;
+          }
+        },
+
+        parseAndApplyReusableArtifactPayload() {
+          const raw = this.payload.trim();
+          if (!raw) {
+            this.payloadError = "Enter a reusable artifact JSON payload before starting a run.";
+            return null;
+          }
+          try {
+            const normalized = this.applyReusableArtifactInput(JSON.parse(raw));
+            this.payload = JSON.stringify(normalized, null, 2);
+            this.payloadError = "";
+            return normalized;
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : "The configuration is invalid.";
+            this.payloadError = `Reusable artifact configuration: ${detail}`;
+            return null;
+          }
+        },
+
         async refreshCatalog() {
           this.refreshing = true;
           try {
@@ -592,6 +786,10 @@
           this.payloadError = "";
           if (this.selectedId === "fan-out-policy") {
             if (!this.parseAndApplyFanOutPayload()) event.preventDefault();
+            return;
+          }
+          if (this.selectedId === "reusable-artifacts") {
+            if (!this.parseAndApplyReusableArtifactPayload()) event.preventDefault();
             return;
           }
 

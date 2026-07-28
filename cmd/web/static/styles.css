@@ -326,6 +326,7 @@ h3 {
 }
 
 .fan-out-controls,
+.workflow-controls,
 .probability-controls {
   min-width: 0;
   margin: 0;
@@ -333,30 +334,35 @@ h3 {
   border-radius: var(--radius-small);
 }
 
-.fan-out-controls {
+.fan-out-controls,
+.workflow-controls {
   margin-bottom: 22px;
   padding: 18px;
   background: var(--surface-subtle);
 }
 
 .fan-out-controls > legend,
+.workflow-controls > legend,
 .probability-controls > legend {
   padding: 0 6px;
   font-size: 0.9rem;
   font-weight: 750;
 }
 
-.fan-out-controls-help {
+.fan-out-controls-help,
+.workflow-controls-help {
   margin: 0 0 16px;
 }
 
 .fan-out-control-grid,
+.workflow-control-grid,
 .probability-control-grid {
   display: grid;
   gap: 14px;
 }
 
-.fan-out-control-grid {
+.fan-out-control-grid,
+.workflow-control-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -819,7 +825,8 @@ textarea:disabled {
     display: block;
   }
 
-  .fan-out-control-grid {
+  .fan-out-control-grid,
+  .workflow-control-grid {
     grid-template-columns: 1fr;
   }
 
@@ -827,7 +834,8 @@ textarea:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .fan-out-controls {
+  .fan-out-controls,
+  .workflow-controls {
     padding: 14px;
   }
 
