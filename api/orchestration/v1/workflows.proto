@@ -89,6 +89,30 @@ message DynamicFanOutResult {
   WaitResult finalize = 9;
 }
 
+enum ReusableArtifactFailureCase {
+  REUSABLE_ARTIFACT_FAILURE_CASE_UNSPECIFIED = 0;
+  REUSABLE_ARTIFACT_FAILURE_CASE_NONE = 1;
+  REUSABLE_ARTIFACT_FAILURE_CASE_BEFORE_PUBLICATION = 2;
+  REUSABLE_ARTIFACT_FAILURE_CASE_AFTER_PUBLICATION = 3;
+}
+
+message ReusableArtifactRequest {
+  string experiment_id = 1;
+  string activity_version = 2;
+  google.protobuf.Duration heavy_work_duration = 3;
+  ReusableArtifactFailureCase failure_case = 4;
+  string failure_target_activity = 5;
+}
+
+message ArtifactReference {
+  string store = 1;
+  string object_key = 2;
+}
+
+message ReusableArtifactResult {
+  repeated ArtifactReference artifacts = 1;
+}
+
 enum AggregationPolicy {
   AGGREGATION_POLICY_UNSPECIFIED = 0;
   AGGREGATION_POLICY_FAIL_FAST = 1;
