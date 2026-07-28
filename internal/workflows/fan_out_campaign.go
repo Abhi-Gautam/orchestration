@@ -193,12 +193,12 @@ func validateOutcomeProbabilities(probabilities *orchestrationv1.OutcomeProbabil
 		{"heartbeat_timeout", probabilities.HeartbeatTimeout},
 	}
 
-	var total int32
+	var total int64
 	for _, weight := range weights {
 		if weight.value < 0 {
 			return fmt.Errorf("probability %s cannot be negative", weight.name)
 		}
-		total += weight.value
+		total += int64(weight.value)
 	}
 	if total != 100 {
 		return fmt.Errorf("background probabilities must total 100, got %d", total)

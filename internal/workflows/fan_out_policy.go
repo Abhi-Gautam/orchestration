@@ -66,10 +66,17 @@ func FanOutPolicyWorkflow(ctx workflow.Context, input *orchestrationv1.FanOutPol
 	result.StartedAt = timestamppb.New(startedAt)
 	finishFanOutResult(ctx, result, startedAt)
 
+	progress := operationProgress(planned, planned, 0, int64(result.Succeeded), int64(result.Failed), int64(result.Canceled))
+	if ctx.Err() != nil {
+		status.setCanceled("canceled", "Fan-out policy was canceled", progress)
+		return result, ctx.Err()
+	}
 	if firstTerminalErr != nil {
+		status.setFailed("failed", "Fan-out policy stopped after a terminal Activity failure", progress)
 		return result, failFastWorkflowError(result)
 	}
 	if input.Policy == orchestrationv1.AggregationPolicy_AGGREGATION_POLICY_ALL_SETTLED_THEN_FAIL && (result.Failed > 0 || result.Canceled > 0) {
+		status.setFailed("failed", "Fan-out policy aggregated available outputs and failed", progress)
 		return result, aggregateWorkflowError(result)
 	}
 
@@ -80,7 +87,7 @@ func FanOutPolicyWorkflow(ctx workflow.Context, input *orchestrationv1.FanOutPol
 	status.setSucceeded(
 		"completed",
 		message,
-		operationProgress(planned, planned, 0, int64(result.Succeeded), int64(result.Failed), int64(result.Canceled)),
+		progress,
 	)
 	return result, nil
 }
@@ -192,7 +199,7 @@ func (collector *fanOutCollector) recordSuccess(index int, outcome *orchestratio
 	} else {
 		collector.result.SucceededFirstAttempt++
 	}
-	collector.successDigests[index] = successfulResultDigest(index, result)
+	collector.successDigests[index] = successfulResultDigest(index, outcome.ActivityId, result)
 }
 
 func (collector *fanOutCollector) recordFailure(outcome *orchestrationv1.ActivityOutcome) {
@@ -258,9 +265,9 @@ func (collector *fanOutCollector) completeAggregate() *orchestrationv1.FanOutAgg
 	}
 }
 
-func successfulResultDigest(index int, result activities.FaultActivityResult) []byte {
+func successfulResultDigest(index int, activityID string, result activities.FaultActivityResult) []byte {
 	digest := sha256.New()
-	_, _ = fmt.Fprintf(digest, "%d\x00%s\x00%s\x00%d", index, result.Name, result.Outcome, result.Attempt)
+	_, _ = fmt.Fprintf(digest, "%d\x00%s\x00%s\x00%s\x00%d", index, activityID, result.Name, result.Outcome, result.Attempt)
 	return digest.Sum(nil)
 }
 

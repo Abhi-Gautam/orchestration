@@ -48,7 +48,19 @@ func (tracker *statusTracker) setRunning(phase, currentStep, message string, pro
 }
 
 func (tracker *statusTracker) setSucceeded(phase, message string, progress *orchestrationv1.OperationProgress) {
-	tracker.status.State = orchestrationv1.OperationState_OPERATION_STATE_SUCCEEDED
+	tracker.setTerminal(orchestrationv1.OperationState_OPERATION_STATE_SUCCEEDED, phase, message, progress)
+}
+
+func (tracker *statusTracker) setFailed(phase, message string, progress *orchestrationv1.OperationProgress) {
+	tracker.setTerminal(orchestrationv1.OperationState_OPERATION_STATE_FAILED, phase, message, progress)
+}
+
+func (tracker *statusTracker) setCanceled(phase, message string, progress *orchestrationv1.OperationProgress) {
+	tracker.setTerminal(orchestrationv1.OperationState_OPERATION_STATE_CANCELED, phase, message, progress)
+}
+
+func (tracker *statusTracker) setTerminal(state orchestrationv1.OperationState, phase, message string, progress *orchestrationv1.OperationProgress) {
+	tracker.status.State = state
 	tracker.status.Phase = phase
 	tracker.status.CurrentStep = ""
 	tracker.status.Message = message

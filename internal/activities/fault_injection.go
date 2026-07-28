@@ -124,7 +124,9 @@ func FaultInjectionActivity(ctx context.Context, input FaultActivityInput) (Faul
 		panic(fmt.Sprintf("injected panic in %s on attempt %d", input.Name, info.Attempt))
 
 	case FaultStartToCloseTimeout:
-		time.Sleep(stallDuration(input))
+		if err := performCancellableWork(ctx, stallDuration(input), input.HeartbeatInterval); err != nil {
+			return FaultActivityResult{}, temporal.NewCanceledError(input.Name, info.Attempt)
+		}
 		return result(FaultStartToCloseTimeout), nil
 
 	case FaultHeartbeatTimeout:
