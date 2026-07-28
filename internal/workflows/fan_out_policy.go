@@ -185,7 +185,7 @@ func aggregateFaultActivities(
 	for remaining > 0 {
 		selector.Select(ctx)
 	}
-	if policy != orchestrationv1.AggregationPolicy_AGGREGATION_POLICY_FAIL_FAST {
+	if policy != orchestrationv1.AggregationPolicy_AGGREGATION_POLICY_FAIL_FAST || collector.result.Succeeded == collector.result.Planned {
 		collector.result.Aggregate = collector.completeAggregate()
 	}
 	return collector.result, firstTerminalErr
