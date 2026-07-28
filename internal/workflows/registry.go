@@ -1,6 +1,7 @@
 package workflows
 
 import (
+	"fmt"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -18,6 +19,7 @@ type Definition struct {
 	NewRequest   func() proto.Message
 	NewResult    func() proto.Message
 	Example      proto.Message
+	WorkflowID   func(proto.Message) (string, error)
 }
 
 func Definitions() []Definition {
@@ -42,6 +44,20 @@ func Definitions() []Definition {
 			NewRequest: func() proto.Message { return &orchestrationv1.DynamicFanOutRequest{} },
 			NewResult:  func() proto.Message { return &orchestrationv1.DynamicFanOutResult{} },
 			Example:    &orchestrationv1.DynamicFanOutRequest{RequestedCount: 10, BranchDuration: durationpb.New(time.Second), FinalizeDuration: durationpb.New(time.Second)},
+		},
+		{
+			ID: "reusable-artifacts", Name: "Reusable Activity Artifacts", Description: "Generate five expensive artifacts and reuse published results across retries and equivalent runs.",
+			TemporalName: ReusableArtifactWorkflowName, Workflow: ReusableArtifactWorkflow,
+			NewRequest: func() proto.Message { return &orchestrationv1.ReusableArtifactRequest{} },
+			NewResult:  func() proto.Message { return &orchestrationv1.ReusableArtifactResult{} },
+			Example: &orchestrationv1.ReusableArtifactRequest{
+				ExperimentId:          "artifact-demo-001",
+				ActivityVersion:       "v1",
+				HeavyWorkDuration:     durationpb.New(20 * time.Second),
+				FailureCase:           orchestrationv1.ReusableArtifactFailureCase_REUSABLE_ARTIFACT_FAILURE_CASE_NONE,
+				FailureTargetActivity: "artifact-002",
+			},
+			WorkflowID: reusableArtifactDefinitionWorkflowID,
 		},
 		{
 			ID: "fan-out-policy", Name: "Fan-Out Policy", Description: "Run fault-injection Activities using the selected aggregation policy.",
@@ -72,6 +88,14 @@ func FindDefinition(id string) (Definition, bool) {
 		}
 	}
 	return Definition{}, false
+}
+
+func reusableArtifactDefinitionWorkflowID(message proto.Message) (string, error) {
+	input, ok := message.(*orchestrationv1.ReusableArtifactRequest)
+	if !ok {
+		return "", fmt.Errorf("expected ReusableArtifactRequest, got %T", message)
+	}
+	return ReusableArtifactWorkflowID(input)
 }
 
 func fanOutPolicyExample() *orchestrationv1.FanOutPolicyRequest {

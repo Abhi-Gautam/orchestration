@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strings"
 
 	"github.com/joho/godotenv"
 
+	temporalactivity "go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
@@ -21,6 +23,16 @@ func main() {
 	temporalAddress := requiredEnv("TEMPORAL_ADDRESS")
 	namespace := requiredEnv("TEMPORAL_NAMESPACE")
 	taskQueue := requiredEnv("TASK_QUEUE")
+	artifactActivities, err := activities.NewArtifactActivities(context.Background(), activities.ArtifactStoreConfig{
+		Endpoint:  requiredEnv("RUSTFS_ENDPOINT_URL"),
+		Region:    requiredEnv("RUSTFS_REGION"),
+		AccessKey: requiredEnv("RUSTFS_ACCESS_KEY_ID"),
+		SecretKey: requiredEnv("RUSTFS_SECRET_ACCESS_KEY"),
+		Bucket:    requiredEnv("RUSTFS_ARTIFACT_BUCKET"),
+	})
+	if err != nil {
+		log.Fatalf("initialize RustFS artifact store: %v", err)
+	}
 
 	c, err := client.Dial(client.Options{HostPort: temporalAddress, Namespace: namespace})
 	if err != nil {
@@ -39,6 +51,10 @@ func main() {
 	w.RegisterActivity(activities.CheckInventory)
 	w.RegisterActivity(activities.FulfillOrder)
 	w.RegisterActivity(activities.BackorderOrder)
+	w.RegisterActivityWithOptions(
+		artifactActivities.GenerateArtifactActivity,
+		temporalactivity.RegisterOptions{Name: activities.GenerateArtifactActivityName},
+	)
 
 	log.Printf("worker listening on task queue %q (temporal %s)", taskQueue, temporalAddress)
 	if err := w.Run(worker.InterruptCh()); err != nil {

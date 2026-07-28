@@ -52,6 +52,44 @@ services:
     networks:
       - orchestration
 
+  rustfs-permissions:
+    image: alpine:3.22
+    container_name: orchestration-rustfs-permissions
+    user: root
+    command: ["sh", "-c", "chown -R 10001:10001 /data"]
+    volumes:
+      - rustfs-data:/data
+    networks:
+      - orchestration
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: orchestration-rustfs
+    command: ["/data"]
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    restart: unless-stopped
+    volumes:
+      - rustfs-data:/data
+    networks:
+      - orchestration
+
   # The only Temporal worker process for this lab.
   worker:
     build:
@@ -66,10 +104,17 @@ services:
     depends_on:
       temporal:
         condition: service_started
+      rustfs:
+        condition: service_healthy
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE}
       TASK_QUEUE: ${TASK_QUEUE}
+      RUSTFS_ENDPOINT_URL: http://rustfs:9000
+      RUSTFS_REGION: us-east-1
+      RUSTFS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      RUSTFS_ARTIFACT_BUCKET: reusable-activity-artifacts
     restart: unless-stopped
     volumes:
       - .:/src
@@ -116,5 +161,7 @@ networks:
 volumes:
   temporal-postgres-data:
     name: orchestration-temporal-postgres-data
+  rustfs-data:
+    name: orchestration-rustfs-data
   web-air-tmp:
   worker-air-tmp:

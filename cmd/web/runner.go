@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -28,10 +29,22 @@ func (s *server) startWorkflow(ctx context.Context, key string, rawInput json.Ra
 		return nil, &inputError{message: fmt.Sprintf("Invalid workflow input: %s", sanitizeDecodeError(err))}
 	}
 
+	workflowID := uniqueWorkflowID(key)
+	workflowIDReusePolicy := enumspb.WORKFLOW_ID_REUSE_POLICY_UNSPECIFIED
+	if definition.WorkflowID != nil {
+		resolvedWorkflowID, resolveErr := definition.WorkflowID(input)
+		if resolveErr != nil {
+			return nil, &inputError{message: fmt.Sprintf("Invalid workflow input: %s", resolveErr)}
+		}
+		workflowID = resolvedWorkflowID
+		workflowIDReusePolicy = enumspb.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE
+	}
+
 	startedAt := time.Now().UTC()
 	run, err := s.temporal.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID:        uniqueWorkflowID(key),
-		TaskQueue: s.taskQueue,
+		ID:                    workflowID,
+		TaskQueue:             s.taskQueue,
+		WorkflowIDReusePolicy: workflowIDReusePolicy,
 	}, definition.TemporalName, input)
 	if err != nil {
 		return nil, &startError{message: "Failed to start the workflow.", cause: err}
