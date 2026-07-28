@@ -1,0 +1,63 @@
+<article
+  id="run-{{.RunID}}"
+  class="card result-card result-pending"
+  tabindex="-1"
+  data-workflow-id="{{.WorkflowID}}"
+  data-run-id="{{.RunID}}"
+  data-terminal="false"
+  data-revision="0"
+>
+  <div class="result-header">
+    <div>
+      <p class="section-kicker">In flight</p>
+      <h2 data-run-name>{{.WorkflowName}}</h2>
+    </div>
+    <span class="status-badge status-warning" data-run-status>Running</span>
+  </div>
+
+  <p class="result-message" role="status" data-run-message>The workflow started and is being monitored for progress.</p>
+
+  <div class="progress-block" data-run-progress>
+    <div class="progress-label">
+      <span data-run-step>Starting workflow</span>
+      <span data-run-percent>0%</span>
+    </div>
+    <progress max="100" value="0" data-run-progress-bar>0%</progress>
+  </div>
+
+  <dl class="metadata-grid">
+    <div>
+      <dt>Elapsed</dt>
+      <dd data-run-elapsed>0ms</dd>
+    </div>
+    <div>
+      <dt>Workflow</dt>
+      <dd data-run-workflow>{{.Workflow}}</dd>
+    </div>
+    <div>
+      <dt>Workflow ID</dt>
+      <dd class="monospace" data-run-workflow-id>{{.WorkflowID}}</dd>
+    </div>
+    <div>
+      <dt>Run ID</dt>
+      <dd class="monospace" data-run-id>{{.RunID}}</dd>
+    </div>
+    <div>
+      <dt>Started</dt>
+      <dd data-run-started>{{.StartedAt}}</dd>
+    </div>
+    <div>
+      <dt>Finished</dt>
+      <dd data-run-finished>—</dd>
+    </div>
+  </dl>
+
+  <a class="temporal-link" data-run-temporal-link href="{{.TemporalUIURL}}" target="_blank" rel="noopener noreferrer">
+    Open this run in Temporal UI <span aria-hidden="true">↗</span>
+  </a>
+
+  <div class="output-block" data-run-output-block hidden>
+    <h3 data-run-output-heading>Result</h3>
+    <pre tabindex="0" data-run-output></pre>
+  </div>
+</article>

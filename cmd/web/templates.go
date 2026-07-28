@@ -13,6 +13,7 @@ type templates struct {
 	page         *template.Template
 	workflowList *template.Template
 	runCard      *template.Template
+	runPending   *template.Template
 	runError     *template.Template
 }
 
@@ -38,6 +39,15 @@ type runCardView struct {
 	HasTemporalUI bool
 }
 
+type runPendingView struct {
+	WorkflowName  string
+	Workflow      string
+	WorkflowID    string
+	RunID         string
+	StartedAt     string
+	TemporalUIURL string
+}
+
 type runErrorView struct {
 	Message string
 }
@@ -55,6 +65,10 @@ func loadTemplates(files fs.FS) (*templates, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse run card template: %w", err)
 	}
+	runPending, err := template.ParseFS(files, "templates/run_pending.gohtml")
+	if err != nil {
+		return nil, fmt.Errorf("parse pending run template: %w", err)
+	}
 	runError, err := template.ParseFS(files, "templates/run_error.gohtml")
 	if err != nil {
 		return nil, fmt.Errorf("parse run error template: %w", err)
@@ -64,6 +78,7 @@ func loadTemplates(files fs.FS) (*templates, error) {
 		page:         page,
 		workflowList: workflowList,
 		runCard:      runCard,
+		runPending:   runPending,
 		runError:     runError,
 	}, nil
 }
@@ -77,6 +92,17 @@ func buildPageView(workflows []catalogWorkflow) (pageView, error) {
 		Workflows:   workflows,
 		CatalogJSON: template.JS(catalogJSON),
 	}, nil
+}
+
+func buildRunPendingView(descriptor *runDescriptor) runPendingView {
+	return runPendingView{
+		WorkflowName:  descriptor.WorkflowName,
+		Workflow:      descriptor.Workflow,
+		WorkflowID:    descriptor.WorkflowID,
+		RunID:         descriptor.RunID,
+		StartedAt:     formatTime(descriptor.StartedAt),
+		TemporalUIURL: descriptor.TemporalUIURL,
+	}
 }
 
 func buildRunCardView(response *runResponse) runCardView {

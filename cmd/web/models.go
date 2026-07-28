@@ -21,6 +21,35 @@ type runRequest struct {
 	Input    json.RawMessage `json:"input"`
 }
 
+type runDescriptor struct {
+	Workflow      string    `json:"workflow"`
+	WorkflowName  string    `json:"workflowName"`
+	Status        string    `json:"status"`
+	WorkflowID    string    `json:"workflowId"`
+	RunID         string    `json:"runId"`
+	StartedAt     time.Time `json:"startedAt"`
+	TemporalUIURL string    `json:"temporalUiUrl"`
+}
+
+type runEvent struct {
+	Workflow        string          `json:"workflow"`
+	WorkflowName    string          `json:"workflowName"`
+	WorkflowID      string          `json:"workflowId"`
+	RunID           string          `json:"runId"`
+	OperationStatus json.RawMessage `json:"operationStatus,omitempty"`
+	RunResponse     *runResponse    `json:"runResponse,omitempty"`
+	Error           string          `json:"error,omitempty"`
+	kind            runEventKind
+}
+
+type runEventKind uint8
+
+const (
+	runEventStatus runEventKind = iota
+	runEventTerminal
+	runEventMonitorError
+)
+
 type runResponse struct {
 	Workflow      string          `json:"workflow"`
 	Status        string          `json:"status"`

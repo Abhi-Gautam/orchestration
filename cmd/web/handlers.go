@@ -51,7 +51,7 @@ func (s *server) handleRunHTML(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := s.executeWorkflow(r.Context(), workflowID, json.RawMessage(rawInput))
+	descriptor, err := s.startWorkflow(r.Context(), workflowID, json.RawMessage(rawInput))
 	if err != nil {
 		s.writeTemplate(w, runHTMLStatus(err), "run_error.gohtml", s.templates.runError, runErrorView{
 			Message: publicRunError(err),
@@ -59,7 +59,16 @@ func (s *server) handleRunHTML(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeTemplate(w, http.StatusOK, "run_card.gohtml", s.templates.runCard, buildRunCardView(response))
+	trigger, err := json.Marshal(map[string]any{"runStarted": descriptor})
+	if err != nil {
+		log.Printf("encode run started trigger: %v", err)
+		s.writeTemplate(w, http.StatusInternalServerError, "run_error.gohtml", s.templates.runError, runErrorView{
+			Message: "The workflow started, but its run metadata could not be returned.",
+		})
+		return
+	}
+	w.Header().Set("HX-Trigger-After-Swap", string(trigger))
+	s.writeTemplate(w, http.StatusAccepted, "run_pending.gohtml", s.templates.runPending, buildRunPendingView(descriptor))
 }
 
 func (s *server) handleListWorkflows(w http.ResponseWriter, _ *http.Request) {
@@ -74,7 +83,8 @@ func (s *server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid JSON request body.")
 		return
 	}
-	if strings.TrimSpace(req.Workflow) == "" {
+	req.Workflow = strings.TrimSpace(req.Workflow)
+	if req.Workflow == "" {
 		writeError(w, http.StatusBadRequest, "Missing workflow id.")
 		return
 	}
@@ -83,12 +93,12 @@ func (s *server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := s.executeWorkflow(r.Context(), req.Workflow, req.Input)
+	descriptor, err := s.startWorkflow(r.Context(), req.Workflow, req.Input)
 	if err != nil {
 		writeError(w, runHTMLStatus(err), publicRunError(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, response)
+	writeJSON(w, http.StatusAccepted, descriptor)
 }
 
 func (s *server) writeTemplate(w http.ResponseWriter, status int, name string, tmpl interface {

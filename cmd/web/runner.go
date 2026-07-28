@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"go.temporal.io/sdk/client"
@@ -16,7 +17,7 @@ import (
 	"orchestration/internal/workflows"
 )
 
-func (s *server) executeWorkflow(ctx context.Context, key string, rawInput json.RawMessage) (*runResponse, error) {
+func (s *server) startWorkflow(ctx context.Context, key string, rawInput json.RawMessage) (*runDescriptor, error) {
 	definition, ok := workflows.FindDefinition(key)
 	if !ok {
 		return nil, &inputError{message: fmt.Sprintf("Unknown workflow id %q.", key)}
@@ -36,12 +37,33 @@ func (s *server) executeWorkflow(ctx context.Context, key string, rawInput json.
 		return nil, &startError{message: "Failed to start the workflow.", cause: err}
 	}
 
+	return &runDescriptor{
+		Workflow:      key,
+		WorkflowName:  definition.Name,
+		Status:        "running",
+		WorkflowID:    run.GetID(),
+		RunID:         run.GetRunID(),
+		StartedAt:     startedAt,
+		TemporalUIURL: s.temporalRunURL(run.GetID(), run.GetRunID()),
+	}, nil
+}
+
+func (s *server) awaitWorkflow(ctx context.Context, descriptor runDescriptor) (*runResponse, error) {
+	definition, ok := workflows.FindDefinition(descriptor.Workflow)
+	if !ok {
+		return nil, &inputError{message: fmt.Sprintf("Unknown workflow id %q.", descriptor.Workflow)}
+	}
+
+	run := s.temporal.GetWorkflow(ctx, descriptor.WorkflowID, descriptor.RunID)
 	result := definition.NewResult()
 	workflowErr := run.Get(ctx, result)
 	if workflowErr != nil {
+		if errors.Is(workflowErr, context.Canceled) || errors.Is(workflowErr, context.DeadlineExceeded) || ctx.Err() != nil {
+			return nil, workflowErr
+		}
 		extractFailureResult(workflowErr, result)
 	}
-	return s.buildResponse(key, run, startedAt, result, workflowErr)
+	return s.buildResponse(descriptor.Workflow, run, descriptor.StartedAt, result, workflowErr)
 }
 
 func (s *server) buildResponse(key string, run client.WorkflowRun, started time.Time, result proto.Message, workflowErr error) (*runResponse, error) {
@@ -53,7 +75,7 @@ func (s *server) buildResponse(key string, run client.WorkflowRun, started time.
 		StartedAt:     started,
 		FinishedAt:    finished,
 		Elapsed:       formatElapsed(finished.Sub(started)),
-		TemporalUIURL: fmt.Sprintf("%s/namespaces/%s/workflows/%s/%s/history", s.temporalUI, s.namespace, run.GetID(), run.GetRunID()),
+		TemporalUIURL: s.temporalRunURL(run.GetID(), run.GetRunID()),
 	}
 
 	if workflowErr == nil {
@@ -114,6 +136,10 @@ func toFailure(err error) *orchestrationv1.WorkflowFailure {
 		return &orchestrationv1.WorkflowFailure{Code: "CANCELED", Message: "The workflow was canceled.", Category: orchestrationv1.FailureCategory_FAILURE_CATEGORY_CANCELED}
 	}
 	return &orchestrationv1.WorkflowFailure{Code: "INTERNAL", Message: "The workflow could not be completed.", Category: orchestrationv1.FailureCategory_FAILURE_CATEGORY_INTERNAL}
+}
+
+func (s *server) temporalRunURL(workflowID, runID string) string {
+	return fmt.Sprintf("%s/namespaces/%s/workflows/%s/%s/history", s.temporalUI, url.PathEscape(s.namespace), url.PathEscape(workflowID), url.PathEscape(runID))
 }
 
 func uniqueWorkflowID(prefix string) string {
