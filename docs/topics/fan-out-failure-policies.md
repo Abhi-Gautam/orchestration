@@ -211,7 +211,8 @@ If the real stack exposes a server, pending-Activity, or queue limitation at 1,0
 
 ### Fail-fast
 
-- Observe terminal Futures in completion order.
+- React to the first terminal failure observed by the Workflow Selector.
+- When several Futures are already ready in one Workflow Task, accept the Selector's deterministic registration-order choice rather than claiming exact History completion order.
 - Preserve the triggering Activity ID, input index, and normalized failure.
 - Request cancellation of unfinished siblings.
 - Wait for requested sibling cancellation to settle so counts are accurate.
@@ -308,7 +309,7 @@ Temporal History still contains individual Activity events and their individual 
 | Start-to-Close timeout | Temporal creates real Start-to-Close timeout attempts and eventually a terminal timeout |
 | Heartbeat timeout | Temporal creates real Heartbeat timeout attempts and eventually a terminal timeout |
 | Panic | Go SDK reports Panic Failure and Retry Policy applies |
-| Fail-fast cancellation | First terminal failure triggers sibling cancellation and Workflow failure |
+| Fail-fast cancellation | First terminal failure observed by the Workflow triggers sibling cancellation and Workflow failure |
 | All-settled partial result | Every Future settles, successful outputs are aggregated, and Workflow completes |
 | All-settled aggregate failure | Every Future settles, successful outputs are aggregated, and Workflow fails afterward |
 | All succeed | Every Activity succeeds and all three policies return the same successful aggregate |
@@ -343,7 +344,8 @@ Six real Workflow Executions are run: all three policies for all-success V1 and 
 
 ### Mixed fail-fast
 
-- The first terminal failure is selected in completion order.
+- The first terminal failure observed by the Workflow Selector triggers fail-fast behavior.
+- If several Futures are ready in one Workflow Task, the deterministic selected failure is not claimed to be the earliest History completion event.
 - Its Activity identity and normalized failure are preserved.
 - Unfinished siblings are canceled.
 - The canceled count is greater than zero.

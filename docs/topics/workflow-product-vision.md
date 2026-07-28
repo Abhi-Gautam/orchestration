@@ -305,7 +305,8 @@ The same seed, Activity IDs, retry configuration, timeout configuration, and wor
 #### Fail-fast
 
 - Activities are scheduled according to the agreed fan-out model.
-- The first terminal failure is observed in completion order.
+- The first terminal failure observed by the Workflow Selector triggers the policy.
+- When several Futures are already ready in one Workflow Task, the Selector's deterministic choice is not claimed to be exact History completion order.
 - Unfinished siblings are canceled.
 - Already completed results remain completed.
 - The triggering Activity identity and normalized failure are preserved.
