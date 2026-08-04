@@ -270,9 +270,85 @@
             </div>
           </fieldset>
 
+          <fieldset
+            class="workflow-controls"
+            x-show="selectedId === 'durable-report'"
+            aria-describedby="durable-report-controls-help payload-error"
+          >
+            <legend>Durable report pipeline</legend>
+            <p id="durable-report-controls-help" class="field-help workflow-controls-help">
+              Generate five reusable RustFS artifacts, consume all five, then persist one immutable business report in SQLite.
+            </p>
+
+            <div class="workflow-control-grid">
+              <label class="control-field" for="durable-report-experiment-id">
+                <span>Experiment ID</span>
+                <input
+                  id="durable-report-experiment-id"
+                  type="text"
+                  spellcheck="false"
+                  autocomplete="off"
+                  x-model="durableReport.experimentId"
+                  @input="syncDurableReportPayload()"
+                >
+              </label>
+
+              <label class="control-field" for="durable-report-id">
+                <span>Business report ID</span>
+                <input
+                  id="durable-report-id"
+                  type="text"
+                  spellcheck="false"
+                  autocomplete="off"
+                  x-model="durableReport.reportId"
+                  @input="syncDurableReportPayload()"
+                >
+              </label>
+
+              <label class="control-field" for="durable-report-version">
+                <span>Activity version</span>
+                <input
+                  id="durable-report-version"
+                  type="text"
+                  spellcheck="false"
+                  autocomplete="off"
+                  x-model="durableReport.activityVersion"
+                  @input="syncDurableReportPayload()"
+                >
+              </label>
+
+              <label class="control-field" for="durable-report-duration">
+                <span>Heavy-work duration (seconds)</span>
+                <input
+                  id="durable-report-duration"
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputmode="numeric"
+                  x-model="durableReport.heavyWorkSeconds"
+                  @input="syncDurableReportPayload()"
+                >
+              </label>
+
+              <label class="control-field" for="durable-report-failure-case">
+                <span>Failure case</span>
+                <select
+                  id="durable-report-failure-case"
+                  x-model="durableReport.failureCase"
+                  @change="syncDurableReportPayload()"
+                >
+                  <option value="DURABLE_REPORT_FAILURE_CASE_NONE">No fault</option>
+                  <option value="DURABLE_REPORT_FAILURE_CASE_AGGREGATION_RETRYABLE">Aggregation retry</option>
+                  <option value="DURABLE_REPORT_FAILURE_CASE_PERSIST_BEFORE_COMMIT">Persist failure before commit</option>
+                  <option value="DURABLE_REPORT_FAILURE_CASE_PERSIST_AFTER_COMMIT">Persist failure after commit</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+
           <div class="field-group">
             <div class="label-row">
-              <label for="payload-input" x-text="selectedId === 'fan-out-policy' || selectedId === 'reusable-artifacts' ? 'Payload preview / editor' : 'Input payload'"></label>
+              <label for="payload-input" x-text="selectedId === 'fan-out-policy' || selectedId === 'reusable-artifacts' || selectedId === 'durable-report' ? 'Payload preview / editor' : 'Input payload'"></label>
               <span>JSON</span>
             </div>
             <textarea
@@ -290,7 +366,7 @@
             <p
               id="payload-help"
               class="field-help"
-              x-text="selectedId === 'fan-out-policy' || selectedId === 'reusable-artifacts'
+              x-text="selectedId === 'fan-out-policy' || selectedId === 'reusable-artifacts' || selectedId === 'durable-report'
                 ? 'The controls update this protobuf JSON preview. Raw edits are applied back to the controls after validation when a run starts.'
                 : 'Edit the example input, then run. You can start another run while earlier ones are still in flight.'"
             ></p>
@@ -442,6 +518,19 @@
         failureCase: "REUSABLE_ARTIFACT_FAILURE_CASE_NONE",
         failureTargetActivity: "artifact-002",
       });
+      const durableReportFailureCases = [
+        "DURABLE_REPORT_FAILURE_CASE_NONE",
+        "DURABLE_REPORT_FAILURE_CASE_AGGREGATION_RETRYABLE",
+        "DURABLE_REPORT_FAILURE_CASE_PERSIST_BEFORE_COMMIT",
+        "DURABLE_REPORT_FAILURE_CASE_PERSIST_AFTER_COMMIT",
+      ];
+      const defaultDurableReportInput = () => ({
+        experimentId: "report-experiment-001",
+        reportId: "report-1001",
+        activityVersion: "v1",
+        heavyWorkDuration: "20s",
+        failureCase: "DURABLE_REPORT_FAILURE_CASE_NONE",
+      });
       let workflows = [];
       try {
         workflows = JSON.parse(document.getElementById("workflow-catalog")?.textContent || "[]");
@@ -477,6 +566,13 @@
           heavyWorkSeconds: "20",
           failureCase: "REUSABLE_ARTIFACT_FAILURE_CASE_NONE",
           failureTargetActivity: "artifact-002",
+        },
+        durableReport: {
+          experimentId: "report-experiment-001",
+          reportId: "report-1001",
+          activityVersion: "v1",
+          heavyWorkSeconds: "20",
+          failureCase: "DURABLE_REPORT_FAILURE_CASE_NONE",
         },
         starting: 0,
         startingMatrix: false,
@@ -534,6 +630,13 @@
               this.applyReusableArtifactInput(defaultReusableArtifactInput());
             }
             this.syncReusableArtifactPayload();
+          } else if (workflow.id === "durable-report") {
+            try {
+              this.applyDurableReportInput(workflow.exampleInput);
+            } catch (_) {
+              this.applyDurableReportInput(defaultDurableReportInput());
+            }
+            this.syncDurableReportPayload();
           } else {
             this.payload = JSON.stringify(workflow.exampleInput ?? {}, null, 2);
             this.payloadError = "";
@@ -759,6 +862,89 @@
           }
         },
 
+        durableReportInputFromControls() {
+          return {
+            experimentId: this.durableReport.experimentId,
+            reportId: this.durableReport.reportId,
+            activityVersion: this.durableReport.activityVersion,
+            heavyWorkDuration: `${this.durableReport.heavyWorkSeconds}s`,
+            failureCase: this.durableReport.failureCase,
+          };
+        },
+
+        normalizeDurableReportInput(input) {
+          if (!input || typeof input !== "object" || Array.isArray(input)) {
+            throw new Error("The durable report payload must be a JSON object.");
+          }
+          const allowed = ["experimentId", "reportId", "activityVersion", "heavyWorkDuration", "failureCase"];
+          const unexpected = Object.keys(input).filter((key) => !allowed.includes(key));
+          if (unexpected.length > 0) {
+            throw new Error(`The durable report payload contains unsupported field ${JSON.stringify(unexpected[0])}.`);
+          }
+          if (typeof input.experimentId !== "string" || !/^[A-Za-z0-9._-]{1,128}$/.test(input.experimentId)) {
+            throw new Error("Experiment ID must be 1-128 characters using letters, numbers, dot, underscore, or hyphen.");
+          }
+          if (typeof input.reportId !== "string" || !/^[A-Za-z0-9._-]{1,128}$/.test(input.reportId)) {
+            throw new Error("Report ID must be 1-128 characters using letters, numbers, dot, underscore, or hyphen.");
+          }
+          if (typeof input.activityVersion !== "string" || input.activityVersion.length === 0 || input.activityVersion.trim() !== input.activityVersion) {
+            throw new Error("Activity version is required and must not have surrounding whitespace.");
+          }
+          if (typeof input.heavyWorkDuration !== "string" || !/^[1-9][0-9]*s$/.test(input.heavyWorkDuration)) {
+            throw new Error("Heavy-work duration must be a positive whole number of seconds, such as 20s.");
+          }
+          if (!durableReportFailureCases.includes(input.failureCase)) {
+            throw new Error("Choose no fault, aggregation retry, persistence failure before commit, or persistence failure after commit.");
+          }
+          return {
+            experimentId: input.experimentId,
+            reportId: input.reportId,
+            activityVersion: input.activityVersion,
+            heavyWorkDuration: input.heavyWorkDuration,
+            failureCase: input.failureCase,
+          };
+        },
+
+        applyDurableReportInput(input) {
+          const normalized = this.normalizeDurableReportInput(input);
+          this.durableReport.experimentId = normalized.experimentId;
+          this.durableReport.reportId = normalized.reportId;
+          this.durableReport.activityVersion = normalized.activityVersion;
+          this.durableReport.heavyWorkSeconds = normalized.heavyWorkDuration.slice(0, -1);
+          this.durableReport.failureCase = normalized.failureCase;
+          return normalized;
+        },
+
+        syncDurableReportPayload() {
+          const input = this.durableReportInputFromControls();
+          this.payload = JSON.stringify(input, null, 2);
+          try {
+            this.normalizeDurableReportInput(input);
+            this.payloadError = "";
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : "The configuration is invalid.";
+            this.payloadError = `Durable report configuration: ${detail}`;
+          }
+        },
+
+        parseAndApplyDurableReportPayload() {
+          const raw = this.payload.trim();
+          if (!raw) {
+            this.payloadError = "Enter a durable report JSON payload before starting a run.";
+            return null;
+          }
+          try {
+            const normalized = this.applyDurableReportInput(JSON.parse(raw));
+            this.payload = JSON.stringify(normalized, null, 2);
+            this.payloadError = "";
+            return normalized;
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : "The configuration is invalid.";
+            this.payloadError = `Durable report configuration: ${detail}`;
+            return null;
+          }
+        },
+
         async refreshCatalog() {
           this.refreshing = true;
           try {
@@ -790,6 +976,10 @@
           }
           if (this.selectedId === "reusable-artifacts") {
             if (!this.parseAndApplyReusableArtifactPayload()) event.preventDefault();
+            return;
+          }
+          if (this.selectedId === "durable-report") {
+            if (!this.parseAndApplyDurableReportPayload()) event.preventDefault();
             return;
           }
 
