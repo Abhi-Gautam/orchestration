@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -22,7 +23,11 @@ import (
 	orchestrationv1 "orchestration/gen/orchestration/v1"
 )
 
-const GenerateArtifactActivityName = "GenerateArtifactActivity"
+const (
+	GenerateArtifactActivityName   = "GenerateArtifactActivity"
+	AggregateArtifactsActivityName = "AggregateArtifactsActivity"
+	maxStoredArtifactBytes         = 1 << 20
+)
 
 type ArtifactStoreConfig struct {
 	Endpoint  string
@@ -44,12 +49,24 @@ type GenerateArtifactInput struct {
 	FailureCase     orchestrationv1.ReusableArtifactFailureCase
 }
 
+type AggregateArtifactsInput struct {
+	References      []*orchestrationv1.ArtifactReference
+	ActivityVersion string
+	InjectFailure   bool
+}
+
+type ReportSummary struct {
+	ArtifactCount  int32
+	SemanticDigest string
+}
+
 type storedArtifact struct {
 	Namespace       string    `json:"namespace"`
 	WorkflowID      string    `json:"workflowId"`
 	ActivityID      string    `json:"activityId"`
 	ActivityType    string    `json:"activityType"`
 	ActivityVersion string    `json:"activityVersion"`
+	Content         string    `json:"content"`
 	PublishedAt     time.Time `json:"publishedAt"`
 }
 
@@ -149,6 +166,7 @@ func (a *ArtifactActivities) GenerateArtifactActivity(ctx context.Context, input
 		ActivityID:      info.ActivityID,
 		ActivityType:    info.ActivityType.Name,
 		ActivityVersion: input.ActivityVersion,
+		Content:         semanticArtifactContent(info.WorkflowExecution.ID, info.ActivityID, input.ActivityVersion),
 		PublishedAt:     time.Now().UTC(),
 	})
 	if err != nil {
@@ -178,6 +196,113 @@ func (a *ArtifactActivities) GenerateArtifactActivity(ctx context.Context, input
 	}
 
 	return reference, nil
+}
+
+func (a *ArtifactActivities) AggregateArtifactsActivity(ctx context.Context, input AggregateArtifactsInput) (ReportSummary, error) {
+	info := activity.GetInfo(ctx)
+	if len(input.References) != 5 {
+		return ReportSummary{}, temporal.NewNonRetryableApplicationError(
+			fmt.Sprintf("exactly five artifact references are required, got %d", len(input.References)),
+			"InvalidArtifactAggregationInput",
+			nil,
+		)
+	}
+	if strings.TrimSpace(input.ActivityVersion) == "" {
+		return ReportSummary{}, temporal.NewNonRetryableApplicationError(
+			"activity version is required",
+			"InvalidArtifactAggregationInput",
+			nil,
+		)
+	}
+
+	digest := sha256.New()
+	for index, reference := range input.References {
+		expectedActivityID := fmt.Sprintf("artifact-%03d", index)
+		artifact, err := a.readStoredArtifact(ctx, reference)
+		if err != nil {
+			return ReportSummary{}, err
+		}
+		if artifact.Namespace != info.Namespace ||
+			artifact.WorkflowID != info.WorkflowExecution.ID ||
+			artifact.ActivityID != expectedActivityID ||
+			artifact.ActivityType != GenerateArtifactActivityName ||
+			artifact.ActivityVersion != input.ActivityVersion ||
+			strings.TrimSpace(artifact.Content) == "" {
+			return ReportSummary{}, temporal.NewNonRetryableApplicationError(
+				fmt.Sprintf("artifact %q does not match the expected semantic identity", reference.GetObjectKey()),
+				"InvalidReusableArtifact",
+				nil,
+				reference.GetObjectKey(),
+				expectedActivityID,
+			)
+		}
+		_, _ = fmt.Fprintf(digest, "%d\x00%s\x00%s\x00%s\x00", index, artifact.ActivityID, artifact.ActivityVersion, artifact.Content)
+	}
+
+	summary := ReportSummary{
+		ArtifactCount:  int32(len(input.References)),
+		SemanticDigest: hex.EncodeToString(digest.Sum(nil)),
+	}
+	if info.Attempt == 1 && input.InjectFailure {
+		return ReportSummary{}, temporal.NewApplicationError(
+			"injected retryable failure after artifact aggregation",
+			"InjectedArtifactAggregationFailure",
+			info.Attempt,
+			summary.SemanticDigest,
+		)
+	}
+
+	activity.GetLogger(ctx).Info("AggregateArtifactsActivity consumed artifacts",
+		"artifactCount", summary.ArtifactCount,
+		"semanticDigest", summary.SemanticDigest,
+		"attempt", info.Attempt,
+	)
+	return summary, nil
+}
+
+func (a *ArtifactActivities) readStoredArtifact(ctx context.Context, reference *orchestrationv1.ArtifactReference) (storedArtifact, error) {
+	if reference == nil || reference.GetStore() != a.store || strings.TrimSpace(reference.GetObjectKey()) == "" {
+		return storedArtifact{}, temporal.NewNonRetryableApplicationError(
+			"artifact reference is invalid or belongs to an unsupported store",
+			"InvalidArtifactReference",
+			nil,
+		)
+	}
+
+	response, err := a.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(a.bucket),
+		Key:    aws.String(reference.GetObjectKey()),
+	})
+	if err != nil {
+		return storedArtifact{}, fmt.Errorf("read reusable artifact %q: %w", reference.GetObjectKey(), err)
+	}
+	defer response.Body.Close()
+
+	payload, err := io.ReadAll(io.LimitReader(response.Body, maxStoredArtifactBytes+1))
+	if err != nil {
+		return storedArtifact{}, fmt.Errorf("read reusable artifact body %q: %w", reference.GetObjectKey(), err)
+	}
+	if len(payload) > maxStoredArtifactBytes {
+		return storedArtifact{}, temporal.NewNonRetryableApplicationError(
+			fmt.Sprintf("artifact %q exceeds the aggregation limit", reference.GetObjectKey()),
+			"InvalidReusableArtifact",
+			nil,
+		)
+	}
+
+	var artifact storedArtifact
+	if err := json.Unmarshal(payload, &artifact); err != nil {
+		return storedArtifact{}, temporal.NewNonRetryableApplicationError(
+			fmt.Sprintf("artifact %q is not valid JSON", reference.GetObjectKey()),
+			"InvalidReusableArtifact",
+			err,
+		)
+	}
+	return artifact, nil
+}
+
+func semanticArtifactContent(workflowID, activityID, activityVersion string) string {
+	return fmt.Sprintf("Synthetic report section %s for workflow %s using activity version %s", activityID, workflowID, activityVersion)
 }
 
 func (a *ArtifactActivities) ensureBucket(ctx context.Context) error {

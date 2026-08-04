@@ -60,6 +60,20 @@ func Definitions() []Definition {
 			WorkflowID: reusableArtifactDefinitionWorkflowID,
 		},
 		{
+			ID: "durable-report", Name: "Durable Report", Description: "Aggregate reusable RustFS artifacts and persist one idempotent business report in SQLite.",
+			TemporalName: DurableReportWorkflowName, Workflow: DurableReportWorkflow,
+			NewRequest: func() proto.Message { return &orchestrationv1.DurableReportRequest{} },
+			NewResult:  func() proto.Message { return &orchestrationv1.DurableReportResult{} },
+			Example: &orchestrationv1.DurableReportRequest{
+				ExperimentId:      "report-experiment-001",
+				ReportId:          "report-1001",
+				ActivityVersion:   "v1",
+				HeavyWorkDuration: durationpb.New(20 * time.Second),
+				FailureCase:       orchestrationv1.DurableReportFailureCase_DURABLE_REPORT_FAILURE_CASE_NONE,
+			},
+			WorkflowID: durableReportDefinitionWorkflowID,
+		},
+		{
 			ID: "fan-out-policy", Name: "Fan-Out Policy", Description: "Run fault-injection Activities using the selected aggregation policy.",
 			TemporalName: FanOutPolicyWorkflowName, Workflow: FanOutPolicyWorkflow,
 			NewRequest: func() proto.Message { return &orchestrationv1.FanOutPolicyRequest{} },
@@ -96,6 +110,14 @@ func reusableArtifactDefinitionWorkflowID(message proto.Message) (string, error)
 		return "", fmt.Errorf("expected ReusableArtifactRequest, got %T", message)
 	}
 	return ReusableArtifactWorkflowID(input)
+}
+
+func durableReportDefinitionWorkflowID(message proto.Message) (string, error) {
+	input, ok := message.(*orchestrationv1.DurableReportRequest)
+	if !ok {
+		return "", fmt.Errorf("expected DurableReportRequest, got %T", message)
+	}
+	return DurableReportWorkflowID(input)
 }
 
 func fanOutPolicyExample() *orchestrationv1.FanOutPolicyRequest {

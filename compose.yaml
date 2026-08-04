@@ -115,10 +115,12 @@ services:
       RUSTFS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
       RUSTFS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
       RUSTFS_ARTIFACT_BUCKET: reusable-activity-artifacts
+      APPLICATION_DB_PATH: /data/application/reports.db
     restart: unless-stopped
     volumes:
       - .:/src
       - worker-air-tmp:/src/tmp
+      - application-data:/data/application
     networks:
       - orchestration
 
@@ -163,5 +165,7 @@ volumes:
     name: orchestration-temporal-postgres-data
   rustfs-data:
     name: orchestration-rustfs-data
+  application-data:
+    name: orchestration-application-data
   web-air-tmp:
   worker-air-tmp:

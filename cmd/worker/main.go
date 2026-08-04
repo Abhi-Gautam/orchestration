@@ -33,6 +33,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("initialize RustFS artifact store: %v", err)
 	}
+	reportActivities, err := activities.NewReportActivities(context.Background(), activities.ReportStoreConfig{
+		Path: requiredEnv("APPLICATION_DB_PATH"),
+	})
+	if err != nil {
+		log.Fatalf("initialize SQLite report store: %v", err)
+	}
 
 	c, err := client.Dial(client.Options{HostPort: temporalAddress, Namespace: namespace})
 	if err != nil {
@@ -54,6 +60,14 @@ func main() {
 	w.RegisterActivityWithOptions(
 		artifactActivities.GenerateArtifactActivity,
 		temporalactivity.RegisterOptions{Name: activities.GenerateArtifactActivityName},
+	)
+	w.RegisterActivityWithOptions(
+		artifactActivities.AggregateArtifactsActivity,
+		temporalactivity.RegisterOptions{Name: activities.AggregateArtifactsActivityName},
+	)
+	w.RegisterActivityWithOptions(
+		reportActivities.PersistReportActivity,
+		temporalactivity.RegisterOptions{Name: activities.PersistReportActivityName},
 	)
 
 	log.Printf("worker listening on task queue %q (temporal %s)", taskQueue, temporalAddress)
