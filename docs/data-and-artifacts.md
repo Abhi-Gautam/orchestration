@@ -1,6 +1,6 @@
 # Data and Artifacts
 
-> **Status:** Architecture rules; reusable Activity artifacts are implemented for one RustFS-backed experiment
+> **Status:** Architecture rules; RustFS artifact reuse and one SQLite-backed durable report pipeline are implemented
 
 Temporal is the execution control plane. It should carry commands, small values, status, and durable references—not become bulk object storage.
 
@@ -15,7 +15,7 @@ Temporal is the execution control plane. It should carry commands, small values,
 
 Anything needed by another Activity or a later retry must not exist only on local scratch.
 
-The local stack includes RustFS for the `ReusableArtifactWorkflow` experiment. An application database and general-purpose artifact adapters are not implemented.
+The local stack includes RustFS for reusable artifacts and a persistent SQLite database for the `DurableReportWorkflow` experiment. General-purpose storage adapters are not implemented.
 
 ## Reusable Activity results
 
@@ -33,6 +33,12 @@ A reusable identity should reflect tenant scope, immutable business inputs, outp
 `ReusableArtifactWorkflow` runs five Activities with stable IDs. Each Activity looks up a RustFS object derived from Temporal namespace, Workflow ID, Activity ID, Activity type, and Activity version. Workflow Run ID, Activity attempt, and Worker Build ID are excluded.
 
 An existing object is reused immediately. A miss performs the configured heartbeating work and publishes the object before returning its compact reference. This experiment intentionally has no locking, retention policy, or automatic Activity-version generation.
+
+## Current durable-report pipeline
+
+`DurableReportWorkflow` generates five reusable RustFS artifacts, passes their compact references to an Activity that consumes all five objects in deterministic order, and persists the resulting semantic digest under an immutable business `report_id` in SQLite. A matching row is reused; the same `report_id` with different semantic content fails as a business conflict.
+
+The SQLite file uses a persistent Docker volume and survives Worker replacement. It demonstrates business-key idempotency for the local single-Worker stack; production multi-Worker deployment requires a shared application database.
 
 ## Failure windows
 
