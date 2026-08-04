@@ -113,6 +113,28 @@ message ReusableArtifactResult {
   repeated ArtifactReference artifacts = 1;
 }
 
+enum DurableReportFailureCase {
+  DURABLE_REPORT_FAILURE_CASE_UNSPECIFIED = 0;
+  DURABLE_REPORT_FAILURE_CASE_NONE = 1;
+  DURABLE_REPORT_FAILURE_CASE_AGGREGATION_RETRYABLE = 2;
+  DURABLE_REPORT_FAILURE_CASE_PERSIST_BEFORE_COMMIT = 3;
+  DURABLE_REPORT_FAILURE_CASE_PERSIST_AFTER_COMMIT = 4;
+}
+
+message DurableReportRequest {
+  string experiment_id = 1;
+  string report_id = 2;
+  string activity_version = 3;
+  google.protobuf.Duration heavy_work_duration = 4;
+  DurableReportFailureCase failure_case = 5;
+}
+
+message DurableReportResult {
+  string report_id = 1;
+  int32 artifact_count = 2;
+  string semantic_digest = 3;
+}
+
 enum AggregationPolicy {
   AGGREGATION_POLICY_UNSPECIFIED = 0;
   AGGREGATION_POLICY_FAIL_FAST = 1;
