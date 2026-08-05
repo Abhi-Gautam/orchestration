@@ -5,17 +5,69 @@ htmx.config.responseHandling = [
   { code: "...", swap: false }
 ];
 
+const workflowEditors = {
+  "fan-out-policy": {
+    apply: "applyFanOutInput",
+    sync: "syncFanOutPayload",
+    parse: "parseAndApplyFanOutPayload",
+  },
+  "reusable-artifacts": {
+    apply: "applyReusableArtifactInput",
+    sync: "syncReusableArtifactPayload",
+    parse: "parseAndApplyReusableArtifactPayload",
+  },
+  "durable-report": {
+    apply: "applyDurableReportInput",
+    sync: "syncDurableReportPayload",
+    parse: "parseAndApplyDurableReportPayload",
+  },
+};
+
+function pageJSON(id, fallback) {
+  try {
+    return JSON.parse(document.getElementById(id)?.textContent || "");
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function optionValues(id) {
+  return Array.from(document.getElementById(id)?.options ?? [], (option) => option.value);
+}
+
+function requireObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} must be a JSON object.`);
+  }
+}
+
+function requireOnlyKeys(value, allowed, label) {
+  const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unexpected.length > 0) {
+    throw new Error(`${label} contains unsupported field ${JSON.stringify(unexpected[0])}.`);
+  }
+}
+
+function requireIdentifier(value, label) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9._-]{1,128}$/.test(value)) {
+    throw new Error(`${label} must be 1-128 characters using letters, numbers, dot, underscore, or hyphen.`);
+  }
+}
+
+function requireActivityVersion(value) {
+  if (typeof value !== "string" || value.length === 0 || value.trim() !== value) {
+    throw new Error("Activity version is required and must not have surrounding whitespace.");
+  }
+}
+
+function requirePositiveSeconds(value) {
+  if (typeof value !== "string" || !/^[1-9][0-9]*s$/.test(value)) {
+    throw new Error("Heavy-work duration must be a positive whole number of seconds, such as 20s.");
+  }
+}
+
 function workflowLab() {
   const activeRunsStorageKey = "temporal-workflow-lab.active-runs.v1";
-  const fanOutPolicies = [
-    "AGGREGATION_POLICY_FAIL_FAST",
-    "AGGREGATION_POLICY_ALL_SETTLED",
-    "AGGREGATION_POLICY_ALL_SETTLED_THEN_FAIL",
-  ];
-  const fanOutCampaigns = [
-    "FAULT_CAMPAIGN_TYPE_ALL_SUCCESS_V1",
-    "FAULT_CAMPAIGN_TYPE_MIXED_V1",
-  ];
   const fanOutProbabilityFields = [
     { key: "success", label: "Success" },
     { key: "retryableFailure", label: "Retryable failure" },
@@ -24,60 +76,12 @@ function workflowLab() {
     { key: "startToCloseTimeout", label: "Start-to-close timeout" },
     { key: "heartbeatTimeout", label: "Heartbeat timeout" },
   ];
-  const defaultFanOutInput = () => ({
-    policy: "AGGREGATION_POLICY_ALL_SETTLED",
-    campaign: {
-      type: "FAULT_CAMPAIGN_TYPE_MIXED_V1",
-      activityCount: 1000,
-      seed: "4815162342",
-      backgroundProbabilities: {
-        success: 82,
-        retryableFailure: 8,
-        nonRetryableFailure: 3,
-        panic: 2,
-        startToCloseTimeout: 3,
-        heartbeatTimeout: 2,
-      },
-    },
-  });
-  const reusableArtifactFailureCases = [
-    "REUSABLE_ARTIFACT_FAILURE_CASE_NONE",
-    "REUSABLE_ARTIFACT_FAILURE_CASE_BEFORE_PUBLICATION",
-    "REUSABLE_ARTIFACT_FAILURE_CASE_AFTER_PUBLICATION",
-  ];
-  const reusableArtifactIDs = [
-    "artifact-000",
-    "artifact-001",
-    "artifact-002",
-    "artifact-003",
-    "artifact-004",
-  ];
-  const defaultReusableArtifactInput = () => ({
-    experimentId: "artifact-demo-001",
-    activityVersion: "v1",
-    heavyWorkDuration: "20s",
-    failureCase: "REUSABLE_ARTIFACT_FAILURE_CASE_NONE",
-    failureTargetActivity: "artifact-002",
-  });
-  const durableReportFailureCases = [
-    "DURABLE_REPORT_FAILURE_CASE_NONE",
-    "DURABLE_REPORT_FAILURE_CASE_AGGREGATION_RETRYABLE",
-    "DURABLE_REPORT_FAILURE_CASE_PERSIST_BEFORE_COMMIT",
-    "DURABLE_REPORT_FAILURE_CASE_PERSIST_AFTER_COMMIT",
-  ];
-  const defaultDurableReportInput = () => ({
-    experimentId: "report-experiment-001",
-    reportId: "report-1001",
-    activityVersion: "v1",
-    heavyWorkDuration: "20s",
-    failureCase: "DURABLE_REPORT_FAILURE_CASE_NONE",
-  });
-  let workflows = [];
-  try {
-    workflows = JSON.parse(document.getElementById("workflow-catalog")?.textContent || "[]");
-  } catch (_) {
-    workflows = [];
-  }
+  const workflows = pageJSON("workflow-catalog", []);
+  const pageConfig = pageJSON("page-config", {});
+  const maxEventRuns = Number.isInteger(pageConfig.maxEventRuns) && pageConfig.maxEventRuns > 0
+    ? pageConfig.maxEventRuns
+    : 1;
+  const fanOutExample = workflows.find((workflow) => workflow.id === "fan-out-policy")?.exampleInput;
 
   return {
     workflows,
@@ -87,33 +91,26 @@ function workflowLab() {
     payload: "{\n}",
     payloadError: "",
     fanOut: {
-      policy: "AGGREGATION_POLICY_ALL_SETTLED",
-      campaignType: "FAULT_CAMPAIGN_TYPE_MIXED_V1",
-      activityCount: "1000",
-      seed: "4815162342",
-      probabilities: {
-        success: "82",
-        retryableFailure: "8",
-        nonRetryableFailure: "3",
-        panic: "2",
-        startToCloseTimeout: "3",
-        heartbeatTimeout: "2",
-      },
+      policy: "",
+      campaignType: "",
+      activityCount: "",
+      seed: "",
+      probabilities: Object.fromEntries(fanOutProbabilityFields.map(({ key }) => [key, ""])),
     },
     fanOutProbabilityFields,
     reusableArtifacts: {
-      experimentId: "artifact-demo-001",
-      activityVersion: "v1",
-      heavyWorkSeconds: "20",
-      failureCase: "REUSABLE_ARTIFACT_FAILURE_CASE_NONE",
-      failureTargetActivity: "artifact-002",
+      experimentId: "",
+      activityVersion: "",
+      heavyWorkSeconds: "",
+      failureCase: "",
+      failureTargetActivity: "",
     },
     durableReport: {
-      experimentId: "report-experiment-001",
-      reportId: "report-1001",
-      activityVersion: "v1",
-      heavyWorkSeconds: "20",
-      failureCase: "DURABLE_REPORT_FAILURE_CASE_NONE",
+      experimentId: "",
+      reportId: "",
+      activityVersion: "",
+      heavyWorkSeconds: "",
+      failureCase: "",
     },
     starting: 0,
     startingMatrix: false,
@@ -157,30 +154,19 @@ function workflowLab() {
       this.selectedId = workflow.id;
       this.selectedName = workflow.name;
       this.selectedDescription = workflow.description || "No description provided.";
-      if (workflow.id === "fan-out-policy") {
-        try {
-          this.applyFanOutInput(workflow.exampleInput);
-        } catch (_) {
-          this.applyFanOutInput(defaultFanOutInput());
-        }
-        this.syncFanOutPayload();
-      } else if (workflow.id === "reusable-artifacts") {
-        try {
-          this.applyReusableArtifactInput(workflow.exampleInput);
-        } catch (_) {
-          this.applyReusableArtifactInput(defaultReusableArtifactInput());
-        }
-        this.syncReusableArtifactPayload();
-      } else if (workflow.id === "durable-report") {
-        try {
-          this.applyDurableReportInput(workflow.exampleInput);
-        } catch (_) {
-          this.applyDurableReportInput(defaultDurableReportInput());
-        }
-        this.syncDurableReportPayload();
-      } else {
+      const editor = workflowEditors[workflow.id];
+      if (!editor) {
         this.payload = JSON.stringify(workflow.exampleInput ?? {}, null, 2);
         this.payloadError = "";
+        return;
+      }
+      try {
+        this[editor.apply](workflow.exampleInput);
+        this[editor.sync]();
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "The example input is invalid.";
+        this.payload = JSON.stringify(workflow.exampleInput ?? {}, null, 2);
+        this.payloadError = `The registered example input is invalid. ${detail}`;
       }
     },
 
@@ -202,28 +188,16 @@ function workflowLab() {
     },
 
     normalizeFanOutInput(input) {
-      const requireObject = (value, label) => {
-        if (!value || typeof value !== "object" || Array.isArray(value)) {
-          throw new Error(`${label} must be a JSON object.`);
-        }
-      };
-      const requireOnlyKeys = (value, allowed, label) => {
-        const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
-        if (unexpected.length > 0) {
-          throw new Error(`${label} contains unsupported field ${JSON.stringify(unexpected[0])}.`);
-        }
-      };
-
       requireObject(input, "The fan-out payload");
       requireOnlyKeys(input, ["policy", "campaign"], "The fan-out payload");
-      if (!fanOutPolicies.includes(input.policy)) {
+      if (!optionValues("fan-out-policy-select").includes(input.policy)) {
         throw new Error("Choose a supported aggregation policy.");
       }
 
       const campaign = input.campaign;
       requireObject(campaign, "Campaign");
       requireOnlyKeys(campaign, ["type", "activityCount", "seed", "backgroundProbabilities"], "Campaign");
-      if (!fanOutCampaigns.includes(campaign.type)) {
+      if (!optionValues("fan-out-campaign-select").includes(campaign.type)) {
         throw new Error("Choose the all-success V1 or mixed V1 campaign.");
       }
 
@@ -283,7 +257,8 @@ function workflowLab() {
       this.fanOut.activityCount = String(normalized.campaign.activityCount);
       this.fanOut.seed = normalized.campaign.seed;
       const probabilities = normalized.campaign.backgroundProbabilities
-        ?? defaultFanOutInput().campaign.backgroundProbabilities;
+        ?? fanOutExample?.campaign?.backgroundProbabilities
+        ?? this.fanOut.probabilities;
       for (const { key } of fanOutProbabilityFields) {
         this.fanOut.probabilities[key] = String(probabilities[key]);
       }
@@ -331,28 +306,20 @@ function workflowLab() {
     },
 
     normalizeReusableArtifactInput(input) {
-      if (!input || typeof input !== "object" || Array.isArray(input)) {
-        throw new Error("The reusable artifact payload must be a JSON object.");
-      }
-      const allowed = ["experimentId", "activityVersion", "heavyWorkDuration", "failureCase", "failureTargetActivity"];
-      const unexpected = Object.keys(input).filter((key) => !allowed.includes(key));
-      if (unexpected.length > 0) {
-        throw new Error(`The reusable artifact payload contains unsupported field ${JSON.stringify(unexpected[0])}.`);
-      }
-      if (typeof input.experimentId !== "string" || !/^[A-Za-z0-9._-]{1,128}$/.test(input.experimentId)) {
-        throw new Error("Experiment ID must be 1-128 characters using letters, numbers, dot, underscore, or hyphen.");
-      }
-      if (typeof input.activityVersion !== "string" || input.activityVersion.length === 0 || input.activityVersion.trim() !== input.activityVersion) {
-        throw new Error("Activity version is required and must not have surrounding whitespace.");
-      }
-      if (typeof input.heavyWorkDuration !== "string" || !/^[1-9][0-9]*s$/.test(input.heavyWorkDuration)) {
-        throw new Error("Heavy-work duration must be a positive whole number of seconds, such as 20s.");
-      }
-      if (!reusableArtifactFailureCases.includes(input.failureCase)) {
+      requireObject(input, "The reusable artifact payload");
+      requireOnlyKeys(
+        input,
+        ["experimentId", "activityVersion", "heavyWorkDuration", "failureCase", "failureTargetActivity"],
+        "The reusable artifact payload",
+      );
+      requireIdentifier(input.experimentId, "Experiment ID");
+      requireActivityVersion(input.activityVersion);
+      requirePositiveSeconds(input.heavyWorkDuration);
+      if (!optionValues("reusable-artifact-failure-case").includes(input.failureCase)) {
         throw new Error("Choose no fault, failure before publication, or failure after publication.");
       }
-      if (!reusableArtifactIDs.includes(input.failureTargetActivity)) {
-        throw new Error("Failure target must be one of artifact-000 through artifact-004.");
+      if (!optionValues("reusable-artifact-failure-target").includes(input.failureTargetActivity)) {
+        throw new Error("Choose a supported artifact failure target.");
       }
       return {
         experimentId: input.experimentId,
@@ -414,27 +381,17 @@ function workflowLab() {
     },
 
     normalizeDurableReportInput(input) {
-      if (!input || typeof input !== "object" || Array.isArray(input)) {
-        throw new Error("The durable report payload must be a JSON object.");
-      }
-      const allowed = ["experimentId", "reportId", "activityVersion", "heavyWorkDuration", "failureCase"];
-      const unexpected = Object.keys(input).filter((key) => !allowed.includes(key));
-      if (unexpected.length > 0) {
-        throw new Error(`The durable report payload contains unsupported field ${JSON.stringify(unexpected[0])}.`);
-      }
-      if (typeof input.experimentId !== "string" || !/^[A-Za-z0-9._-]{1,128}$/.test(input.experimentId)) {
-        throw new Error("Experiment ID must be 1-128 characters using letters, numbers, dot, underscore, or hyphen.");
-      }
-      if (typeof input.reportId !== "string" || !/^[A-Za-z0-9._-]{1,128}$/.test(input.reportId)) {
-        throw new Error("Report ID must be 1-128 characters using letters, numbers, dot, underscore, or hyphen.");
-      }
-      if (typeof input.activityVersion !== "string" || input.activityVersion.length === 0 || input.activityVersion.trim() !== input.activityVersion) {
-        throw new Error("Activity version is required and must not have surrounding whitespace.");
-      }
-      if (typeof input.heavyWorkDuration !== "string" || !/^[1-9][0-9]*s$/.test(input.heavyWorkDuration)) {
-        throw new Error("Heavy-work duration must be a positive whole number of seconds, such as 20s.");
-      }
-      if (!durableReportFailureCases.includes(input.failureCase)) {
+      requireObject(input, "The durable report payload");
+      requireOnlyKeys(
+        input,
+        ["experimentId", "reportId", "activityVersion", "heavyWorkDuration", "failureCase"],
+        "The durable report payload",
+      );
+      requireIdentifier(input.experimentId, "Experiment ID");
+      requireIdentifier(input.reportId, "Report ID");
+      requireActivityVersion(input.activityVersion);
+      requirePositiveSeconds(input.heavyWorkDuration);
+      if (!optionValues("durable-report-failure-case").includes(input.failureCase)) {
         throw new Error("Choose no fault, aggregation retry, persistence failure before commit, or persistence failure after commit.");
       }
       return {
@@ -511,16 +468,9 @@ function workflowLab() {
 
     onSubmit(event) {
       this.payloadError = "";
-      if (this.selectedId === "fan-out-policy") {
-        if (!this.parseAndApplyFanOutPayload()) event.preventDefault();
-        return;
-      }
-      if (this.selectedId === "reusable-artifacts") {
-        if (!this.parseAndApplyReusableArtifactPayload()) event.preventDefault();
-        return;
-      }
-      if (this.selectedId === "durable-report") {
-        if (!this.parseAndApplyDurableReportPayload()) event.preventDefault();
+      const editor = workflowEditors[this.selectedId];
+      if (editor) {
+        if (!this[editor.parse]()) event.preventDefault();
         return;
       }
 
@@ -563,10 +513,11 @@ function workflowLab() {
       if (!baseInput) return;
 
       this.startingMatrix = true;
+      const policies = optionValues("fan-out-policy-select");
       const failures = [];
       let started = 0;
       try {
-        for (const policy of fanOutPolicies) {
+        for (const policy of policies) {
           this.starting += 1;
           try {
             const input = {
@@ -605,7 +556,7 @@ function workflowLab() {
       if (failures.length > 0) {
         const summary = started === 0
           ? "No policy runs were started."
-          : `Started ${started} of 3 policy runs; already-started runs remain active.`;
+          : `Started ${started} of ${policies.length} policy runs; already-started runs remain active.`;
         this.payloadError = `${summary} ${failures.join(" ")}`;
       }
     },
@@ -622,7 +573,7 @@ function workflowLab() {
         temporalUiUrl: detail.temporalUiUrl,
       };
       const key = this.runKey(descriptor);
-      this.activeRuns = [descriptor, ...this.activeRuns.filter((run) => this.runKey(run) !== key)].slice(0, 32);
+      this.activeRuns = [descriptor, ...this.activeRuns.filter((run) => this.runKey(run) !== key)].slice(0, maxEventRuns);
       this.persistActiveRuns();
       this.ensureRunCard(descriptor);
       this.connectEvents();
@@ -636,7 +587,7 @@ function workflowLab() {
       if (this.activeRuns.length === 0) return;
 
       const url = new URL("/api/runs/events", window.location.origin);
-      for (const run of this.activeRuns.slice(0, 32)) {
+      for (const run of this.activeRuns.slice(0, maxEventRuns)) {
         url.searchParams.append("run", JSON.stringify(run));
       }
       const source = new EventSource(url);
@@ -775,7 +726,7 @@ function workflowLab() {
     loadActiveRuns() {
       try {
         const runs = JSON.parse(sessionStorage.getItem(activeRunsStorageKey) || "[]");
-        return Array.isArray(runs) ? runs.filter((run) => run.workflowId && run.runId).slice(0, 32) : [];
+        return Array.isArray(runs) ? runs.filter((run) => run.workflowId && run.runId).slice(0, maxEventRuns) : [];
       } catch (_) {
         return [];
       }

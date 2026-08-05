@@ -16,8 +16,12 @@ type templates struct {
 }
 
 type pageView struct {
-	Workflows   []catalogWorkflow
 	CatalogJSON template.JS
+	ConfigJSON  template.JS
+}
+
+type pageConfig struct {
+	MaxEventRuns int `json:"maxEventRuns"`
 }
 
 type runPendingView struct {
@@ -64,9 +68,13 @@ func buildPageView(workflows []catalogWorkflow) (pageView, error) {
 	if err != nil {
 		return pageView{}, err
 	}
+	configJSON, err := json.Marshal(pageConfig{MaxEventRuns: maxEventRuns})
+	if err != nil {
+		return pageView{}, err
+	}
 	return pageView{
-		Workflows:   workflows,
 		CatalogJSON: template.JS(catalogJSON),
+		ConfigJSON:  template.JS(configJSON),
 	}, nil
 }
 
