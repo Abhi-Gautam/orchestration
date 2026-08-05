@@ -10,8 +10,6 @@ import (
 	"orchestration/internal/activities"
 )
 
-const GreetingWorkflowName = "GreetingWorkflow"
-
 func GreetingWorkflow(ctx workflow.Context, input *orchestrationv1.GreetingRequest) (*orchestrationv1.GreetingResult, error) {
 	if input == nil || input.Name == "" {
 		return nil, invalidRequest("INVALID_GREETING_REQUEST", "name is required")

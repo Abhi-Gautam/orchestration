@@ -14,6 +14,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"orchestration/internal/activities"
+	"orchestration/internal/workflowcatalog"
 	"orchestration/internal/workflows"
 )
 
@@ -47,8 +48,17 @@ func main() {
 	defer c.Close()
 
 	w := worker.New(c, taskQueue, worker.Options{})
-	for _, definition := range workflows.Definitions() {
-		w.RegisterWorkflowWithOptions(definition.Workflow, workflow.RegisterOptions{Name: definition.TemporalName})
+	workflowExecutions := workflows.Executions()
+	for _, definition := range workflowcatalog.Definitions() {
+		execution, ok := workflowExecutions[definition.TemporalName]
+		if !ok {
+			log.Fatalf("workflow catalog entry %q has no executable implementation", definition.TemporalName)
+		}
+		w.RegisterWorkflowWithOptions(execution, workflow.RegisterOptions{Name: definition.TemporalName})
+		delete(workflowExecutions, definition.TemporalName)
+	}
+	if len(workflowExecutions) != 0 {
+		log.Fatalf("%d executable Workflow implementations are missing from the catalog", len(workflowExecutions))
 	}
 	w.RegisterActivity(activities.FormatGreeting)
 	w.RegisterActivity(activities.WaitActivity)

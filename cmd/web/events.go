@@ -9,7 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"orchestration/internal/workflows"
+	"orchestration/internal/workflowcatalog"
 )
 
 const maxEventRuns = 32
@@ -110,7 +110,7 @@ func (s *server) eventRunDescriptors(r *http.Request) ([]runDescriptor, error) {
 		}
 
 		descriptor.Workflow = strings.TrimSpace(descriptor.Workflow)
-		definition, ok := workflows.FindDefinition(descriptor.Workflow)
+		definition, ok := workflowcatalog.FindDefinition(descriptor.Workflow)
 		if !ok {
 			return nil, fmt.Errorf("Unknown workflow id %q.", descriptor.Workflow)
 		}

@@ -9,8 +9,6 @@ import (
 	"orchestration/internal/activities"
 )
 
-const SimpleDiamondWorkflowName = "SimpleDiamondWorkflow"
-
 func SimpleDiamondWorkflow(ctx workflow.Context, input *orchestrationv1.SimpleDiamondRequest) (*orchestrationv1.SimpleDiamondResult, error) {
 	if input == nil {
 		return nil, invalidRequest("INVALID_SIMPLE_DIAMOND_REQUEST", "input is required")

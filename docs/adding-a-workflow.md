@@ -2,7 +2,7 @@
 
 > **Status:** Current source-extension process
 
-A Workflow is compiled into both the web and Worker binaries. There is no runtime plugin loader or external catalog yet.
+Workflow start contracts are compiled into both web and Worker binaries. Executable Workflow and Activity implementations are linked only into the Worker. There is no runtime plugin loader or external catalog.
 
 ## 1. Define the contract
 
@@ -36,16 +36,16 @@ Activities may execute more than once. External side effects must be idempotent,
 
 ## 4. Register the Workflow
 
-Add one `Definition` in `internal/workflows/registry.go` with:
+Add one `Definition` in `internal/workflowcatalog/catalog.go` with:
 
 - A stable product ID.
 - Display name and description.
 - A stable Temporal Workflow type name.
-- The Workflow function.
+
 - Request and result constructors.
 - A valid example request.
 
-The same definition drives Worker registration, the web catalog, input decoding, result decoding, and monitoring validation. A generic Workflow does not need a new HTTP handler or page.
+Map the definition's Temporal name to its executable Workflow function in `internal/workflows/registry.go`. Worker startup rejects missing or extra implementations. The shared catalog drives the web catalog, input decoding, result decoding, Workflow-ID resolution, and monitoring validation. A generic Workflow does not need a new HTTP handler or page.
 
 ## 5. Verify it
 
@@ -67,5 +67,6 @@ The generic UI can edit protobuf JSON and render generic results. Add UI code on
 - Contracts: `api/orchestration/v1/workflows.proto`
 - Workflows: `internal/workflows/`
 - Activities: `internal/activities/`
-- Catalog: `internal/workflows/registry.go`
+- Catalog and start contracts: `internal/workflowcatalog/catalog.go`
+- Executable Workflow mapping: `internal/workflows/registry.go`
 - Worker registration: `cmd/worker/main.go`

@@ -5,9 +5,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	orchestrationv1 "orchestration/gen/orchestration/v1"
+	"orchestration/internal/workflowcatalog"
 )
-
-const OperationStatusQueryName = "operation-status"
 
 type statusTracker struct {
 	status *orchestrationv1.OperationStatus
@@ -29,7 +28,7 @@ func newStatusTracker(
 		Progress:         cloneProgress(progress),
 		AvailableActions: []orchestrationv1.OperationAction{orchestrationv1.OperationAction_OPERATION_ACTION_CANCEL},
 	}}
-	if err := workflow.SetQueryHandler(ctx, OperationStatusQueryName, func() (*orchestrationv1.OperationStatus, error) {
+	if err := workflow.SetQueryHandler(ctx, workflowcatalog.OperationStatusQueryName, func() (*orchestrationv1.OperationStatus, error) {
 		return proto.Clone(tracker.status).(*orchestrationv1.OperationStatus), nil
 	}); err != nil {
 		return nil, err

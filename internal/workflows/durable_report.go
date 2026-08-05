@@ -9,10 +9,10 @@ import (
 
 	orchestrationv1 "orchestration/gen/orchestration/v1"
 	"orchestration/internal/activities"
+	"orchestration/internal/workflowcatalog"
 )
 
 const (
-	DurableReportWorkflowName  = "DurableReportWorkflow"
 	durableReportArtifactCount = 5
 	durableReportActivityCount = durableReportArtifactCount + 2
 )
@@ -24,7 +24,7 @@ type durableReportArtifactExecution struct {
 }
 
 func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableReportRequest) (*orchestrationv1.DurableReportResult, error) {
-	heavyWorkDuration, err := validateDurableReportRequest(input)
+	heavyWorkDuration, err := workflowcatalog.ValidateDurableReportRequest(input)
 	if err != nil {
 		return nil, invalidRequest("INVALID_DURABLE_REPORT_REQUEST", err.Error())
 	}
@@ -32,7 +32,7 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 	status, err := newStatusTracker(
 		ctx,
 		"generating-artifacts",
-		artifactActivityIDs(durableReportArtifactCount),
+		workflowcatalog.ArtifactActivityIDs(durableReportArtifactCount),
 		"Generating reusable report artifacts",
 		operationProgress(durableReportActivityCount, durableReportArtifactCount, durableReportArtifactCount, 0, 0, 0),
 	)
@@ -41,7 +41,7 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 	}
 
 	producerOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: heavyWorkDuration + artifactActivityTimeoutMargin,
+		StartToCloseTimeout: heavyWorkDuration + workflowcatalog.ArtifactActivityTimeoutMargin,
 		HeartbeatTimeout:    5 * time.Second,
 		WaitForCancellation: true,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -52,7 +52,7 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 	}
 	producerExecutions := make([]durableReportArtifactExecution, durableReportArtifactCount)
 	for index := range producerExecutions {
-		activityID := artifactActivityID(index)
+		activityID := workflowcatalog.ArtifactActivityID(index)
 		activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 			ActivityID:          activityID,
 			StartToCloseTimeout: producerOptions.StartToCloseTimeout,
@@ -185,35 +185,6 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 	}
 	status.setSucceeded("completed", "Durable report is ready", operationProgress(durableReportActivityCount, durableReportActivityCount, 0, durableReportActivityCount, 0, 0))
 	return result, nil
-}
-
-func DurableReportWorkflowID(input *orchestrationv1.DurableReportRequest) (string, error) {
-	if _, err := validateDurableReportRequest(input); err != nil {
-		return "", err
-	}
-	return "durable-report/" + input.ExperimentId, nil
-}
-
-func validateDurableReportRequest(input *orchestrationv1.DurableReportRequest) (time.Duration, error) {
-	if input == nil {
-		return 0, errors.New("input is required")
-	}
-	heavyWorkDuration, err := validateArtifactGenerationInput(input.ExperimentId, input.ActivityVersion, input.HeavyWorkDuration)
-	if err != nil {
-		return 0, err
-	}
-	if !validExperimentID(input.ReportId) {
-		return 0, errors.New("report ID must be 1-128 characters using letters, numbers, dot, underscore, or hyphen")
-	}
-	switch input.FailureCase {
-	case orchestrationv1.DurableReportFailureCase_DURABLE_REPORT_FAILURE_CASE_NONE,
-		orchestrationv1.DurableReportFailureCase_DURABLE_REPORT_FAILURE_CASE_AGGREGATION_RETRYABLE,
-		orchestrationv1.DurableReportFailureCase_DURABLE_REPORT_FAILURE_CASE_PERSIST_BEFORE_COMMIT,
-		orchestrationv1.DurableReportFailureCase_DURABLE_REPORT_FAILURE_CASE_PERSIST_AFTER_COMMIT:
-	default:
-		return 0, errors.New("failure case must be none, aggregation retryable, persist before commit, or persist after commit")
-	}
-	return heavyWorkDuration, nil
 }
 
 func durableReportFailure(code, message, stage string, err error) error {

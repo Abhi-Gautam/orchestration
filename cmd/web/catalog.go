@@ -5,11 +5,11 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"orchestration/internal/workflows"
+	"orchestration/internal/workflowcatalog"
 )
 
 func workflowCatalog() []catalogWorkflow {
-	definitions := workflows.Definitions()
+	definitions := workflowcatalog.Definitions()
 	catalog := make([]catalogWorkflow, 0, len(definitions))
 	for _, definition := range definitions {
 		example, err := protojson.Marshal(definition.Example)

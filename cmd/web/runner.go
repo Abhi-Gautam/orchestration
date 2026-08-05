@@ -15,11 +15,11 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	orchestrationv1 "orchestration/gen/orchestration/v1"
-	"orchestration/internal/workflows"
+	"orchestration/internal/workflowcatalog"
 )
 
 func (s *server) startWorkflow(ctx context.Context, key string, rawInput json.RawMessage) (*runDescriptor, error) {
-	definition, ok := workflows.FindDefinition(key)
+	definition, ok := workflowcatalog.FindDefinition(key)
 	if !ok {
 		return nil, &inputError{message: fmt.Sprintf("Unknown workflow id %q.", key)}
 	}
@@ -62,7 +62,7 @@ func (s *server) startWorkflow(ctx context.Context, key string, rawInput json.Ra
 }
 
 func (s *server) awaitWorkflow(ctx context.Context, descriptor runDescriptor) (*runResponse, error) {
-	definition, ok := workflows.FindDefinition(descriptor.Workflow)
+	definition, ok := workflowcatalog.FindDefinition(descriptor.Workflow)
 	if !ok {
 		return nil, &inputError{message: fmt.Sprintf("Unknown workflow id %q.", descriptor.Workflow)}
 	}

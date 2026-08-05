@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	orchestrationv1 "orchestration/gen/orchestration/v1"
-	"orchestration/internal/workflows"
+	"orchestration/internal/workflowcatalog"
 )
 
 type runKey struct {
@@ -138,7 +138,7 @@ func (watcher *runWatcher) run() {
 		watcher.fail(errors.New("describe workflow returned no execution info"))
 		return
 	}
-	definition, ok := workflows.FindDefinition(watcher.descriptor.Workflow)
+	definition, ok := workflowcatalog.FindDefinition(watcher.descriptor.Workflow)
 	if !ok {
 		watcher.fail(fmt.Errorf("unknown workflow %q", watcher.descriptor.Workflow))
 		return
@@ -204,7 +204,7 @@ func (watcher *runWatcher) queryStatus(descriptor runDescriptor) {
 		watcher.ctx,
 		descriptor.WorkflowID,
 		descriptor.RunID,
-		workflows.OperationStatusQueryName,
+		workflowcatalog.OperationStatusQueryName,
 	)
 	if err != nil {
 		if watcher.ctx.Err() == nil {

@@ -13,8 +13,6 @@ import (
 	"orchestration/internal/activities"
 )
 
-const DynamicFanOutWorkflowName = "DynamicFanOutWorkflow"
-
 func DynamicFanOutWorkflow(ctx workflow.Context, input *orchestrationv1.DynamicFanOutRequest) (*orchestrationv1.DynamicFanOutResult, error) {
 	if input == nil || input.RequestedCount <= 0 {
 		return nil, invalidRequest("INVALID_DYNAMIC_FAN_OUT_REQUEST", "requested_count must be greater than zero")

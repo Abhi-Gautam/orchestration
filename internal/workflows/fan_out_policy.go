@@ -19,10 +19,7 @@ import (
 	"orchestration/internal/activities"
 )
 
-const (
-	FanOutPolicyWorkflowName = "FanOutPolicyWorkflow"
-	maxFanOutSamples         = 8
-)
+const maxFanOutSamples = 8
 
 type scheduledActivity struct {
 	index      int

@@ -13,8 +13,6 @@ import (
 	"orchestration/internal/activities"
 )
 
-const ConditionalBranchWorkflowName = "ConditionalBranchWorkflow"
-
 func ConditionalBranchWorkflow(ctx workflow.Context, input *orchestrationv1.ConditionalBranchRequest) (*orchestrationv1.ConditionalBranchResult, error) {
 	if input == nil {
 		return nil, invalidRequest("INVALID_CONDITIONAL_BRANCH_REQUEST", "input is required")
