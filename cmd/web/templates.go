@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"strings"
 	"time"
 )
 
 type templates struct {
 	page         *template.Template
 	workflowList *template.Template
-	runCard      *template.Template
 	runPending   *template.Template
 	runError     *template.Template
 }
@@ -20,23 +18,6 @@ type templates struct {
 type pageView struct {
 	Workflows   []catalogWorkflow
 	CatalogJSON template.JS
-}
-
-type runCardView struct {
-	Status        string
-	StatusKind    string
-	Message       string
-	Elapsed       string
-	Workflow      string
-	WorkflowID    string
-	RunID         string
-	StartedAt     string
-	FinishedAt    string
-	TemporalUIURL string
-	OutputHeading string
-	OutputPretty  string
-	HasOutput     bool
-	HasTemporalUI bool
 }
 
 type runPendingView struct {
@@ -61,10 +42,6 @@ func loadTemplates(files fs.FS) (*templates, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse workflow list template: %w", err)
 	}
-	runCard, err := template.ParseFS(files, "templates/run_card.gohtml")
-	if err != nil {
-		return nil, fmt.Errorf("parse run card template: %w", err)
-	}
 	runPending, err := template.ParseFS(files, "templates/run_pending.gohtml")
 	if err != nil {
 		return nil, fmt.Errorf("parse pending run template: %w", err)
@@ -77,7 +54,6 @@ func loadTemplates(files fs.FS) (*templates, error) {
 	return &templates{
 		page:         page,
 		workflowList: workflowList,
-		runCard:      runCard,
 		runPending:   runPending,
 		runError:     runError,
 	}, nil
@@ -103,97 +79,6 @@ func buildRunPendingView(descriptor *runDescriptor) runPendingView {
 		StartedAt:     formatTime(descriptor.StartedAt),
 		TemporalUIURL: descriptor.TemporalUIURL,
 	}
-}
-
-func buildRunCardView(response *runResponse) runCardView {
-	kind := statusKind(response.Status)
-	view := runCardView{
-		Status:        humanizeStatus(response.Status),
-		StatusKind:    kind,
-		Message:       statusMessage(kind),
-		Elapsed:       response.Elapsed,
-		Workflow:      response.Workflow,
-		WorkflowID:    response.WorkflowID,
-		RunID:         response.RunID,
-		StartedAt:     formatTime(response.StartedAt),
-		FinishedAt:    formatTime(response.FinishedAt),
-		TemporalUIURL: response.TemporalUIURL,
-		HasTemporalUI: strings.TrimSpace(response.TemporalUIURL) != "",
-	}
-
-	if len(response.Failure) > 0 && string(response.Failure) != "null" {
-		view.HasOutput = true
-		view.OutputHeading = "Failure"
-		view.OutputPretty = prettyJSON(response.Failure)
-		return view
-	}
-	if len(response.Result) > 0 && string(response.Result) != "null" {
-		view.HasOutput = true
-		view.OutputHeading = "Result"
-		view.OutputPretty = prettyJSON(response.Result)
-	}
-	return view
-}
-
-func prettyJSON(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return string(raw)
-	}
-	encoded, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return string(raw)
-	}
-	return string(encoded)
-}
-
-func statusKind(status string) string {
-	normalized := strings.ToLower(status)
-	switch {
-	case strings.Contains(normalized, "fail"),
-		strings.Contains(normalized, "error"),
-		strings.Contains(normalized, "cancel"),
-		strings.Contains(normalized, "terminate"),
-		strings.Contains(normalized, "timeout"):
-		return "failure"
-	case strings.Contains(normalized, "complete"),
-		strings.Contains(normalized, "success"),
-		strings.Contains(normalized, "succeed"):
-		return "success"
-	default:
-		return "warning"
-	}
-}
-
-func statusMessage(kind string) string {
-	switch kind {
-	case "success":
-		return "The workflow completed successfully."
-	case "failure":
-		return "The workflow did not complete successfully. Review the failure details below."
-	default:
-		return "The workflow finished with the status reported below."
-	}
-}
-
-func humanizeStatus(status string) string {
-	status = strings.TrimSpace(status)
-	if status == "" {
-		return "Unknown"
-	}
-	status = strings.ReplaceAll(status, "_", " ")
-	status = strings.ReplaceAll(status, "-", " ")
-	parts := strings.Fields(status)
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-		parts[i] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
-	}
-	return strings.Join(parts, " ")
 }
 
 func formatTime(value time.Time) string {
