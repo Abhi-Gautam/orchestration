@@ -219,7 +219,7 @@ func (collector *fanOutCollector) recordFailure(outcome *orchestrationv1.Activit
 		collector.result.Failed++
 		collector.result.FailureBreakdown.HeartbeatTimeout++
 		key = "heartbeat-timeout"
-	case failure.Kind == orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_APPLICATION && failure.Type == "InjectedRetryableFailure":
+	case failure.Kind == orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_APPLICATION && failure.Type == activities.InjectedRetryableFailureErrorType:
 		collector.result.Failed++
 		collector.result.FailureBreakdown.RetryExhausted++
 		key = "retry-exhausted"

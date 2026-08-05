@@ -17,7 +17,10 @@ import (
 	orchestrationv1 "orchestration/gen/orchestration/v1"
 )
 
-const PersistReportActivityName = "PersistReportActivity"
+const (
+	PersistReportActivityName          = "PersistReportActivity"
+	ReportIdempotencyConflictErrorType = "ReportIdempotencyConflict"
+)
 
 type ReportStoreConfig struct {
 	Path string
@@ -192,7 +195,7 @@ func matchingReport(input PersistReportInput, existing ReportRecord) (ReportReco
 	if existing.ArtifactCount != input.Summary.ArtifactCount || existing.SemanticDigest != input.Summary.SemanticDigest {
 		return ReportRecord{}, temporal.NewNonRetryableApplicationError(
 			fmt.Sprintf("report ID %q already exists with different semantic content", input.ReportID),
-			"ReportIdempotencyConflict",
+			ReportIdempotencyConflictErrorType,
 			nil,
 			input.ReportID,
 			existing.SemanticDigest,

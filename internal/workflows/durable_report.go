@@ -172,7 +172,7 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 		}
 		status.setFailed("failed", "Durable report persistence failed", operationProgress(durableReportActivityCount, durableReportActivityCount, 0, durableReportArtifactCount+1, 1, 0))
 		var applicationErr *temporal.ApplicationError
-		if errors.As(err, &applicationErr) && applicationErr.Type() == "ReportIdempotencyConflict" {
+		if errors.As(err, &applicationErr) && applicationErr.Type() == activities.ReportIdempotencyConflictErrorType {
 			return nil, durableReportFailure("REPORT_IDEMPOTENCY_CONFLICT", applicationErr.Message(), "persisting", err)
 		}
 		return nil, durableReportFailure("REPORT_PERSISTENCE_FAILED", "Durable report persistence failed after retries.", "persisting", err)

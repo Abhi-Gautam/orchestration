@@ -14,6 +14,8 @@ import (
 type FaultMode string
 
 const (
+	InjectedRetryableFailureErrorType = "InjectedRetryableFailure"
+
 	FaultSuccess             FaultMode = "success"
 	FaultRetryableFailure    FaultMode = "retryable-failure"
 	FaultNonRetryableFailure FaultMode = "non-retryable-failure"
@@ -100,7 +102,7 @@ func FaultInjectionActivity(ctx context.Context, input FaultActivityInput) (Faul
 		}
 		return FaultActivityResult{}, temporal.NewApplicationError(
 			"injected retryable failure",
-			"InjectedRetryableFailure",
+			InjectedRetryableFailureErrorType,
 			input.Name,
 			info.Attempt,
 		)
