@@ -55,11 +55,6 @@ type AggregateArtifactsInput struct {
 	InjectFailure   bool
 }
 
-type ReportSummary struct {
-	ArtifactCount  int32
-	SemanticDigest string
-}
-
 type storedArtifact struct {
 	Namespace       string    `json:"namespace"`
 	WorkflowID      string    `json:"workflowId"`
@@ -200,9 +195,9 @@ func (a *ArtifactActivities) GenerateArtifactActivity(ctx context.Context, input
 
 func (a *ArtifactActivities) AggregateArtifactsActivity(ctx context.Context, input AggregateArtifactsInput) (ReportSummary, error) {
 	info := activity.GetInfo(ctx)
-	if len(input.References) != 5 {
+	if len(input.References) == 0 {
 		return ReportSummary{}, temporal.NewNonRetryableApplicationError(
-			fmt.Sprintf("exactly five artifact references are required, got %d", len(input.References)),
+			"at least one artifact reference is required",
 			"InvalidArtifactAggregationInput",
 			nil,
 		)

@@ -2,8 +2,6 @@ package workflows
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
@@ -33,7 +31,7 @@ func ReusableArtifactWorkflow(ctx workflow.Context, input *orchestrationv1.Reusa
 	status, err := newStatusTracker(
 		ctx,
 		"generating",
-		"artifact-000,artifact-001,artifact-002,artifact-003,artifact-004",
+		artifactActivityIDs(reusableArtifactCount),
 		"Generating reusable artifacts",
 		operationProgress(reusableArtifactCount, reusableArtifactCount, reusableArtifactCount, 0, 0, 0),
 	)
@@ -42,7 +40,7 @@ func ReusableArtifactWorkflow(ctx workflow.Context, input *orchestrationv1.Reusa
 	}
 
 	activityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: heavyWorkDuration + 30*time.Second,
+		StartToCloseTimeout: heavyWorkDuration + artifactActivityTimeoutMargin,
 		HeartbeatTimeout:    5 * time.Second,
 		WaitForCancellation: true,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -54,7 +52,7 @@ func ReusableArtifactWorkflow(ctx workflow.Context, input *orchestrationv1.Reusa
 	activityCtx := workflow.WithActivityOptions(ctx, activityOptions)
 	executions := make([]reusableArtifactExecution, reusableArtifactCount)
 	for index := range executions {
-		activityID := fmt.Sprintf("artifact-%03d", index)
+		activityID := artifactActivityID(index)
 		failureCase := orchestrationv1.ReusableArtifactFailureCase_REUSABLE_ARTIFACT_FAILURE_CASE_NONE
 		if activityID == input.FailureTargetActivity {
 			failureCase = input.FailureCase
@@ -136,18 +134,9 @@ func validateReusableArtifactRequest(input *orchestrationv1.ReusableArtifactRequ
 	if input == nil {
 		return 0, errors.New("input is required")
 	}
-	if !validExperimentID(input.ExperimentId) {
-		return 0, errors.New("experiment ID must be 1-128 characters using letters, numbers, dot, underscore, or hyphen")
-	}
-	if input.ActivityVersion == "" || input.ActivityVersion != strings.TrimSpace(input.ActivityVersion) {
-		return 0, errors.New("activity version is required and must not have surrounding whitespace")
-	}
-	if input.HeavyWorkDuration == nil || input.HeavyWorkDuration.CheckValid() != nil {
-		return 0, errors.New("heavy-work duration must be a valid protobuf duration")
-	}
-	heavyWorkDuration := input.HeavyWorkDuration.AsDuration()
-	if heavyWorkDuration <= 0 {
-		return 0, errors.New("heavy-work duration must be positive")
+	heavyWorkDuration, err := validateArtifactGenerationInput(input.ExperimentId, input.ActivityVersion, input.HeavyWorkDuration)
+	if err != nil {
+		return 0, err
 	}
 	switch input.FailureCase {
 	case orchestrationv1.ReusableArtifactFailureCase_REUSABLE_ARTIFACT_FAILURE_CASE_NONE:
@@ -162,25 +151,9 @@ func validateReusableArtifactRequest(input *orchestrationv1.ReusableArtifactRequ
 	return heavyWorkDuration, nil
 }
 
-func validExperimentID(value string) bool {
-	if len(value) == 0 || len(value) > 128 || value != strings.TrimSpace(value) {
-		return false
-	}
-	for _, character := range value {
-		if (character >= 'a' && character <= 'z') ||
-			(character >= 'A' && character <= 'Z') ||
-			(character >= '0' && character <= '9') ||
-			character == '.' || character == '_' || character == '-' {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
 func validReusableArtifactID(value string) bool {
 	for index := 0; index < reusableArtifactCount; index++ {
-		if value == fmt.Sprintf("artifact-%03d", index) {
+		if value == artifactActivityID(index) {
 			return true
 		}
 	}

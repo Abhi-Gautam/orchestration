@@ -27,6 +27,11 @@ type ReportActivities struct {
 	db *sql.DB
 }
 
+type ReportSummary struct {
+	ArtifactCount  int32
+	SemanticDigest string
+}
+
 type PersistReportInput struct {
 	ReportID    string
 	Summary     ReportSummary
