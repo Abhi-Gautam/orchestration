@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -37,7 +38,29 @@ type Definition struct {
 	WorkflowID   func(proto.Message) (string, error)
 }
 
-func Definitions() []Definition {
+// Definitions returns the shared start contracts. The catalog is built once and every
+// caller sees the same entries, so an entry and its Example must be treated as read-only.
+func Definitions() []Definition { return definitions() }
+
+// FindDefinition resolves a product ID. It reads a prepared index because the catalog is
+// on the start, monitoring and Query paths, where rebuilding it per lookup would allocate
+// every request's worth of example messages to answer one question.
+func FindDefinition(id string) (Definition, bool) {
+	definition, found := definitionsByID()[id]
+	return definition, found
+}
+
+var definitions = sync.OnceValue(buildDefinitions)
+
+var definitionsByID = sync.OnceValue(func() map[string]Definition {
+	index := make(map[string]Definition, len(definitions()))
+	for _, definition := range definitions() {
+		index[definition.ID] = definition
+	}
+	return index
+})
+
+func buildDefinitions() []Definition {
 	return []Definition{
 		{
 			ID: "greeting", Name: "Greeting", Description: "Run one Activity and return a greeting.",
@@ -108,15 +131,6 @@ func Definitions() []Definition {
 			},
 		},
 	}
-}
-
-func FindDefinition(id string) (Definition, bool) {
-	for _, definition := range Definitions() {
-		if definition.ID == id {
-			return definition, true
-		}
-	}
-	return Definition{}, false
 }
 
 func ReusableArtifactWorkflowID(input *orchestrationv1.ReusableArtifactRequest) (string, error) {
