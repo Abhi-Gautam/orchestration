@@ -11,6 +11,7 @@ Work from product contracts, then prove behavior in code and tests.
 
 Read only the relevant canonical documents:
 
+- `docs/design-rationale.md`
 - `docs/architecture.md`
 - `docs/adding-a-workflow.md`
 - `docs/execution-semantics.md`
@@ -18,6 +19,8 @@ Read only the relevant canonical documents:
 - `docs/http-api.md`
 
 State whether the request changes current behavior, a public contract, or an unimplemented design direction. Do not present planned capabilities as supported.
+
+Check the request against the rejected designs in `docs/design-rationale.md`. Those entries were removed for measured reasons. Reintroducing one requires an agreed model and a stated reason against the entry, not a fresh justification.
 
 ## Model only when needed
 

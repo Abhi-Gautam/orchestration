@@ -2,6 +2,16 @@
 
 A Temporal-backed base for durable business operations and AI workflows. It provides compiled workflow discovery, asynchronous starts, product-facing status, SSE updates, structured failures, and a generic UI.
 
+## Why this exists
+
+Teams adopt a durable execution engine and then keep their own tables "just for the UI". A run row, a per-step status, a variables table, a dedup ledger, a progress feed. Each addition is reasonable on its own. Within a year, durability, retries, deduplication, cancellation, and progress each exist twice, and every hand-built copy is wrong in a different way. What is left is a database-backed workflow interpreter wearing a Temporal costume.
+
+This repository is the counter-example. Each Workflow isolates one execution concern and runs against a real stack, so the rules below rest on evidence rather than assertion.
+
+**North star:** a user or agent selects a Workflow, supplies input, and never needs to know its internal DAG. The Workflow contract owns operation identity, reusable work, valid commands, exposed progress, and whether regeneration is meaningful. Nothing about a running operation is duplicated outside Temporal.
+
+The failure modes behind each rule, the experiment that answers each one, and the designs rejected along the way are in [Design rationale](docs/design-rationale.md).
+
 This repository is currently a source-extension lab, not a runtime plugin platform. Adding a Workflow means changing and rebuilding this Go module.
 
 ## Run locally
@@ -47,6 +57,7 @@ flowchart TD
 
 | Document | Use it when |
 |---|---|
+| [Design rationale](docs/design-rationale.md) | You want the failure modes this project answers, or you are about to reintroduce a rejected design |
 | [Architecture](docs/architecture.md) | You need the runtime boundaries and execution lifecycle |
 | [Adding a Workflow](docs/adding-a-workflow.md) | You are adding business Workflows and Activities |
 | [Execution semantics](docs/execution-semantics.md) | You need branching, fan-out, failure, or control behavior |
@@ -56,6 +67,8 @@ flowchart TD
 ## Current boundaries
 
 The supplied Compose stack is for local development. The project does not yet provide authentication, tenant isolation, a public extension SDK, dynamic Workflow installation, production deployment manifests, or user-facing control APIs such as cancel and retry.
+
+Execution concerns that remain unproven here, including run-tree cancellation, Workflow versioning and replay, and run attach, are listed in [Design rationale](docs/design-rationale.md#not-yet-answered).
 
 Run the Go checks with:
 

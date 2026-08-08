@@ -34,7 +34,7 @@ Raw History is never sent to the product UI. It is an operator record and a wake
 
 A Workflow status contains its state, phase, friendly step, message, progress, revision, and currently available actions. The Workflow owns those values because action availability changes with runtime state.
 
-Registry entries describe how to start and decode a Workflow. They must not duplicate runtime behavior with flags such as `CanPause` or `CanRetry`.
+Registry entries describe how to start and decode a Workflow. They must not duplicate runtime behavior with flags such as `CanPause` or `CanRetry`. See `design-rationale.md` for why static capability flags were rejected.
 
 ## Durability boundaries
 
