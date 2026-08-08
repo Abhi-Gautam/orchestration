@@ -167,7 +167,7 @@ func aggregateFaultActivities(
 			outcome := &orchestrationv1.ActivityOutcome{ActivityId: item.activityID, Index: int32(item.index)}
 			var activityResult activities.FaultActivityResult
 			if err := f.Get(ctx, &activityResult); err != nil {
-				outcome.Failure = classifyActivityFailure(err)
+				outcome.Failure = classifyActivityFailure(ctx, err)
 				collector.recordFailure(outcome)
 				if policy == orchestrationv1.AggregationPolicy_AGGREGATION_POLICY_FAIL_FAST && firstTerminalErr == nil && outcome.Failure.Kind != orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_CANCELED {
 					firstTerminalErr = err
@@ -327,27 +327,24 @@ func aggregateWorkflowError(result *orchestrationv1.FanOutPolicyResult) error {
 	return temporal.NewNonRetryableApplicationError(message, "FanOutAggregateFailure", nil, failure, result)
 }
 
-func classifyActivityFailure(err error) *orchestrationv1.ActivityFailure {
+func classifyActivityFailure(ctx workflow.Context, err error) *orchestrationv1.ActivityFailure {
 	var canceledErr *temporal.CanceledError
 	if errors.As(err, &canceledErr) {
 		return &orchestrationv1.ActivityFailure{
-			Kind:    orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_CANCELED,
-			Message: safeFailureMessage(canceledErr.Error()),
+			Kind:         orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_CANCELED,
+			Message:      safeFailureMessage(canceledErr.Error()),
+			FinalAttempt: finalAttempt(ctx, canceledErr.HasDetails, canceledErr.Details),
 		}
 	}
 
 	var timeoutErr *temporal.TimeoutError
 	if errors.As(err, &timeoutErr) {
-		failure := &orchestrationv1.ActivityFailure{
-			Kind:        orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_TIMEOUT,
-			Message:     safeFailureMessage(timeoutErr.Message()),
-			TimeoutType: timeoutErr.TimeoutType().String(),
+		return &orchestrationv1.ActivityFailure{
+			Kind:         orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_TIMEOUT,
+			Message:      safeFailureMessage(timeoutErr.Message()),
+			TimeoutType:  timeoutErr.TimeoutType().String(),
+			FinalAttempt: finalAttempt(ctx, timeoutErr.HasLastHeartbeatDetails, timeoutErr.LastHeartbeatDetails),
 		}
-		if timeoutErr.HasLastHeartbeatDetails() {
-			var heartbeat string
-			_ = timeoutErr.LastHeartbeatDetails(&heartbeat, &failure.FinalAttempt)
-		}
-		return failure
 	}
 
 	var panicErr *temporal.PanicError
@@ -361,23 +358,34 @@ func classifyActivityFailure(err error) *orchestrationv1.ActivityFailure {
 
 	var applicationErr *temporal.ApplicationError
 	if errors.As(err, &applicationErr) {
-		failure := &orchestrationv1.ActivityFailure{
+		return &orchestrationv1.ActivityFailure{
 			Kind:         orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_APPLICATION,
 			Message:      safeFailureMessage(applicationErr.Message()),
 			Type:         applicationErr.Type(),
 			NonRetryable: applicationErr.NonRetryable(),
+			FinalAttempt: finalAttempt(ctx, applicationErr.HasDetails, applicationErr.Details),
 		}
-		if applicationErr.HasDetails() {
-			var activityName string
-			_ = applicationErr.Details(&activityName, &failure.FinalAttempt)
-		}
-		return failure
 	}
 
 	return &orchestrationv1.ActivityFailure{
 		Kind:    orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_UNKNOWN,
 		Message: safeFailureMessage(err.Error()),
 	}
+}
+
+// finalAttempt decodes the one ActivityAttempt an Activity attaches. The SDK reports
+// success when it decodes fewer values than were requested, so a drifted shape would be
+// published as attempt zero; report the decode failure instead of asserting a number.
+func finalAttempt(ctx workflow.Context, hasDetails func() bool, decode func(...interface{}) error) int32 {
+	if !hasDetails() {
+		return 0
+	}
+	var attempt orchestrationv1.ActivityAttempt
+	if err := decode(&attempt); err != nil {
+		workflow.GetLogger(ctx).Warn("Activity attempt detail could not be decoded", "error", err)
+		return 0
+	}
+	return attempt.Attempt
 }
 
 func safeFailureMessage(message string) string {

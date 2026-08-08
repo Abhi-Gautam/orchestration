@@ -114,8 +114,7 @@ func (a *ReportActivities) PersistReportActivity(ctx context.Context, input Pers
 		return ReportRecord{}, temporal.NewApplicationError(
 			"injected retryable failure before report commit",
 			"InjectedBeforeReportCommit",
-			input.ReportID,
-			info.Attempt,
+			Attempt(ctx),
 		)
 	}
 
@@ -164,8 +163,7 @@ func (a *ReportActivities) PersistReportActivity(ctx context.Context, input Pers
 		return ReportRecord{}, temporal.NewApplicationError(
 			"injected retryable failure after report commit",
 			"InjectedAfterReportCommit",
-			input.ReportID,
-			info.Attempt,
+			Attempt(ctx),
 		)
 	}
 	return record, nil

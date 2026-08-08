@@ -142,7 +142,7 @@ func (a *ArtifactActivities) GenerateArtifactActivity(ctx context.Context, input
 		"duration", input.WorkDuration,
 		"objectKey", objectKey,
 	)
-	if err := performArtifactWork(ctx, input.WorkDuration, info.Attempt); err != nil {
+	if err := performArtifactWork(ctx, input.WorkDuration); err != nil {
 		return nil, err
 	}
 
@@ -150,8 +150,7 @@ func (a *ArtifactActivities) GenerateArtifactActivity(ctx context.Context, input
 		return nil, temporal.NewApplicationError(
 			"injected failure before artifact publication",
 			"InjectedBeforeArtifactPublication",
-			info.ActivityID,
-			info.Attempt,
+			Attempt(ctx),
 		)
 	}
 
@@ -185,8 +184,7 @@ func (a *ArtifactActivities) GenerateArtifactActivity(ctx context.Context, input
 		return nil, temporal.NewApplicationError(
 			"injected failure after artifact publication",
 			"InjectedAfterArtifactPublication",
-			info.ActivityID,
-			info.Attempt,
+			Attempt(ctx),
 		)
 	}
 
@@ -227,8 +225,7 @@ func (a *ArtifactActivities) AggregateArtifactsActivity(ctx context.Context, inp
 				fmt.Sprintf("artifact %q does not match the expected semantic identity", reference.GetObjectKey()),
 				"InvalidReusableArtifact",
 				nil,
-				reference.GetObjectKey(),
-				expectedActivityID,
+				Attempt(ctx),
 			)
 		}
 		_, _ = fmt.Fprintf(digest, "%d\x00%s\x00%s\x00%s\x00", index, artifact.ActivityID, artifact.ActivityVersion, artifact.Content)
@@ -242,8 +239,7 @@ func (a *ArtifactActivities) AggregateArtifactsActivity(ctx context.Context, inp
 		return ReportSummary{}, temporal.NewApplicationError(
 			"injected retryable failure after artifact aggregation",
 			"InjectedArtifactAggregationFailure",
-			info.Attempt,
-			summary.SemanticDigest,
+			Attempt(ctx),
 		)
 	}
 
@@ -340,7 +336,7 @@ func reusableArtifactKey(namespace, workflowID, activityID, activityType, activi
 	return "reusable-activity-artifacts/" + hex.EncodeToString(digest.Sum(nil)) + ".json"
 }
 
-func performArtifactWork(ctx context.Context, duration time.Duration, attempt int32) error {
+func performArtifactWork(ctx context.Context, duration time.Duration) error {
 	timer := time.NewTimer(duration)
 	defer timer.Stop()
 	ticker := time.NewTicker(time.Second)
@@ -351,7 +347,7 @@ func performArtifactWork(ctx context.Context, duration time.Duration, attempt in
 		case <-timer.C:
 			return nil
 		case <-ticker.C:
-			activity.RecordHeartbeat(ctx, "performing-heavy-work", attempt)
+			activity.RecordHeartbeat(ctx, Attempt(ctx))
 		case <-ctx.Done():
 			return ctx.Err()
 		}

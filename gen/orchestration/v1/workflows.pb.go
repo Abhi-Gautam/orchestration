@@ -1824,6 +1824,62 @@ func (x *FanOutPolicyRequest) GetCampaign() *FaultCampaignSpec {
 	return nil
 }
 
+// Attached to every Activity heartbeat and failure so a Workflow can report which attempt
+// produced a terminal outcome. It is one typed value on purpose: the SDK leaves surplus
+// decode targets untouched and still reports success, so a positional detail list cannot
+// be validated and quietly reports attempt zero when the shapes drift.
+type ActivityAttempt struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ActivityId    string                 `protobuf:"bytes,1,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
+	Attempt       int32                  `protobuf:"varint,2,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ActivityAttempt) Reset() {
+	*x = ActivityAttempt{}
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ActivityAttempt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ActivityAttempt) ProtoMessage() {}
+
+func (x *ActivityAttempt) ProtoReflect() protoreflect.Message {
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ActivityAttempt.ProtoReflect.Descriptor instead.
+func (*ActivityAttempt) Descriptor() ([]byte, []int) {
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ActivityAttempt) GetActivityId() string {
+	if x != nil {
+		return x.ActivityId
+	}
+	return ""
+}
+
+func (x *ActivityAttempt) GetAttempt() int32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
 type ActivityFailure struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Kind          ActivityFailureKind    `protobuf:"varint,1,opt,name=kind,proto3,enum=orchestration.v1.ActivityFailureKind" json:"kind,omitempty"`
@@ -1838,7 +1894,7 @@ type ActivityFailure struct {
 
 func (x *ActivityFailure) Reset() {
 	*x = ActivityFailure{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[18]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1850,7 +1906,7 @@ func (x *ActivityFailure) String() string {
 func (*ActivityFailure) ProtoMessage() {}
 
 func (x *ActivityFailure) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[18]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1863,7 +1919,7 @@ func (x *ActivityFailure) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActivityFailure.ProtoReflect.Descriptor instead.
 func (*ActivityFailure) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{18}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ActivityFailure) GetKind() ActivityFailureKind {
@@ -1922,7 +1978,7 @@ type FaultActivityResult struct {
 
 func (x *FaultActivityResult) Reset() {
 	*x = FaultActivityResult{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[19]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1934,7 +1990,7 @@ func (x *FaultActivityResult) String() string {
 func (*FaultActivityResult) ProtoMessage() {}
 
 func (x *FaultActivityResult) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[19]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1947,7 +2003,7 @@ func (x *FaultActivityResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FaultActivityResult.ProtoReflect.Descriptor instead.
 func (*FaultActivityResult) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{19}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *FaultActivityResult) GetName() string {
@@ -2004,7 +2060,7 @@ type ActivityOutcome struct {
 
 func (x *ActivityOutcome) Reset() {
 	*x = ActivityOutcome{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[20]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2016,7 +2072,7 @@ func (x *ActivityOutcome) String() string {
 func (*ActivityOutcome) ProtoMessage() {}
 
 func (x *ActivityOutcome) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[20]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2029,7 +2085,7 @@ func (x *ActivityOutcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActivityOutcome.ProtoReflect.Descriptor instead.
 func (*ActivityOutcome) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{20}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ActivityOutcome) GetActivityId() string {
@@ -2071,7 +2127,7 @@ type FanOutAggregate struct {
 
 func (x *FanOutAggregate) Reset() {
 	*x = FanOutAggregate{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[21]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2083,7 +2139,7 @@ func (x *FanOutAggregate) String() string {
 func (*FanOutAggregate) ProtoMessage() {}
 
 func (x *FanOutAggregate) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[21]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2096,7 +2152,7 @@ func (x *FanOutAggregate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FanOutAggregate.ProtoReflect.Descriptor instead.
 func (*FanOutAggregate) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{21}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *FanOutAggregate) GetComplete() bool {
@@ -2135,7 +2191,7 @@ type FanOutFailureBreakdown struct {
 
 func (x *FanOutFailureBreakdown) Reset() {
 	*x = FanOutFailureBreakdown{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[22]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2147,7 +2203,7 @@ func (x *FanOutFailureBreakdown) String() string {
 func (*FanOutFailureBreakdown) ProtoMessage() {}
 
 func (x *FanOutFailureBreakdown) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[22]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2160,7 +2216,7 @@ func (x *FanOutFailureBreakdown) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FanOutFailureBreakdown.ProtoReflect.Descriptor instead.
 func (*FanOutFailureBreakdown) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{22}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *FanOutFailureBreakdown) GetRetryExhausted() int32 {
@@ -2236,7 +2292,7 @@ type FanOutPolicyResult struct {
 
 func (x *FanOutPolicyResult) Reset() {
 	*x = FanOutPolicyResult{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[23]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2248,7 +2304,7 @@ func (x *FanOutPolicyResult) String() string {
 func (*FanOutPolicyResult) ProtoMessage() {}
 
 func (x *FanOutPolicyResult) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[23]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2261,7 +2317,7 @@ func (x *FanOutPolicyResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FanOutPolicyResult.ProtoReflect.Descriptor instead.
 func (*FanOutPolicyResult) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{23}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *FanOutPolicyResult) GetPolicy() AggregationPolicy {
@@ -2389,7 +2445,7 @@ type WorkflowFailure struct {
 
 func (x *WorkflowFailure) Reset() {
 	*x = WorkflowFailure{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[24]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2401,7 +2457,7 @@ func (x *WorkflowFailure) String() string {
 func (*WorkflowFailure) ProtoMessage() {}
 
 func (x *WorkflowFailure) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[24]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2414,7 +2470,7 @@ func (x *WorkflowFailure) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowFailure.ProtoReflect.Descriptor instead.
 func (*WorkflowFailure) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{24}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *WorkflowFailure) GetCode() string {
@@ -2465,7 +2521,7 @@ type ConditionalBranchRequest struct {
 
 func (x *ConditionalBranchRequest) Reset() {
 	*x = ConditionalBranchRequest{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[25]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2477,7 +2533,7 @@ func (x *ConditionalBranchRequest) String() string {
 func (*ConditionalBranchRequest) ProtoMessage() {}
 
 func (x *ConditionalBranchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[25]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2490,7 +2546,7 @@ func (x *ConditionalBranchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConditionalBranchRequest.ProtoReflect.Descriptor instead.
 func (*ConditionalBranchRequest) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{25}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ConditionalBranchRequest) GetOrderId() string {
@@ -2533,7 +2589,7 @@ type InventorySnapshot struct {
 
 func (x *InventorySnapshot) Reset() {
 	*x = InventorySnapshot{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[26]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2545,7 +2601,7 @@ func (x *InventorySnapshot) String() string {
 func (*InventorySnapshot) ProtoMessage() {}
 
 func (x *InventorySnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[26]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2558,7 +2614,7 @@ func (x *InventorySnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InventorySnapshot.ProtoReflect.Descriptor instead.
 func (*InventorySnapshot) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{26}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *InventorySnapshot) GetSku() string {
@@ -2599,7 +2655,7 @@ type FulfillmentOutcome struct {
 
 func (x *FulfillmentOutcome) Reset() {
 	*x = FulfillmentOutcome{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[27]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2611,7 +2667,7 @@ func (x *FulfillmentOutcome) String() string {
 func (*FulfillmentOutcome) ProtoMessage() {}
 
 func (x *FulfillmentOutcome) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[27]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2624,7 +2680,7 @@ func (x *FulfillmentOutcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FulfillmentOutcome.ProtoReflect.Descriptor instead.
 func (*FulfillmentOutcome) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{27}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *FulfillmentOutcome) GetShipmentId() string {
@@ -2652,7 +2708,7 @@ type BackorderOutcome struct {
 
 func (x *BackorderOutcome) Reset() {
 	*x = BackorderOutcome{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[28]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2664,7 +2720,7 @@ func (x *BackorderOutcome) String() string {
 func (*BackorderOutcome) ProtoMessage() {}
 
 func (x *BackorderOutcome) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[28]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2677,7 +2733,7 @@ func (x *BackorderOutcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackorderOutcome.ProtoReflect.Descriptor instead.
 func (*BackorderOutcome) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{28}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *BackorderOutcome) GetBackorderId() string {
@@ -2717,7 +2773,7 @@ type ConditionalBranchResult struct {
 
 func (x *ConditionalBranchResult) Reset() {
 	*x = ConditionalBranchResult{}
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[29]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2729,7 +2785,7 @@ func (x *ConditionalBranchResult) String() string {
 func (*ConditionalBranchResult) ProtoMessage() {}
 
 func (x *ConditionalBranchResult) ProtoReflect() protoreflect.Message {
-	mi := &file_orchestration_v1_workflows_proto_msgTypes[29]
+	mi := &file_orchestration_v1_workflows_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2742,7 +2798,7 @@ func (x *ConditionalBranchResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConditionalBranchResult.ProtoReflect.Descriptor instead.
 func (*ConditionalBranchResult) Descriptor() ([]byte, []int) {
-	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{29}
+	return file_orchestration_v1_workflows_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ConditionalBranchResult) GetOrderId() string {
@@ -2908,7 +2964,11 @@ const file_orchestration_v1_workflows_proto_rawDesc = "" +
 	"\x13FanOutPolicyRequest\x12;\n" +
 	"\x06policy\x18\x01 \x01(\x0e2#.orchestration.v1.AggregationPolicyR\x06policy\x12=\n" +
 	"\bbranches\x18\x02 \x03(\v2!.orchestration.v1.FaultBranchSpecR\bbranches\x12?\n" +
-	"\bcampaign\x18\x04 \x01(\v2#.orchestration.v1.FaultCampaignSpecR\bcampaignJ\x04\b\x03\x10\x04R\x11finalize_duration\"\xe7\x01\n" +
+	"\bcampaign\x18\x04 \x01(\v2#.orchestration.v1.FaultCampaignSpecR\bcampaignJ\x04\b\x03\x10\x04R\x11finalize_duration\"L\n" +
+	"\x0fActivityAttempt\x12\x1f\n" +
+	"\vactivity_id\x18\x01 \x01(\tR\n" +
+	"activityId\x12\x18\n" +
+	"\aattempt\x18\x02 \x01(\x05R\aattempt\"\xe7\x01\n" +
 	"\x0fActivityFailure\x129\n" +
 	"\x04kind\x18\x01 \x01(\x0e2%.orchestration.v1.ActivityFailureKindR\x04kind\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
@@ -3072,7 +3132,7 @@ func file_orchestration_v1_workflows_proto_rawDescGZIP() []byte {
 }
 
 var file_orchestration_v1_workflows_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
-var file_orchestration_v1_workflows_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_orchestration_v1_workflows_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_orchestration_v1_workflows_proto_goTypes = []any{
 	(OperationState)(0),              // 0: orchestration.v1.OperationState
 	(OperationAction)(0),             // 1: orchestration.v1.OperationAction
@@ -3102,83 +3162,84 @@ var file_orchestration_v1_workflows_proto_goTypes = []any{
 	(*FaultCampaignSpec)(nil),        // 25: orchestration.v1.FaultCampaignSpec
 	(*FaultBranchSpec)(nil),          // 26: orchestration.v1.FaultBranchSpec
 	(*FanOutPolicyRequest)(nil),      // 27: orchestration.v1.FanOutPolicyRequest
-	(*ActivityFailure)(nil),          // 28: orchestration.v1.ActivityFailure
-	(*FaultActivityResult)(nil),      // 29: orchestration.v1.FaultActivityResult
-	(*ActivityOutcome)(nil),          // 30: orchestration.v1.ActivityOutcome
-	(*FanOutAggregate)(nil),          // 31: orchestration.v1.FanOutAggregate
-	(*FanOutFailureBreakdown)(nil),   // 32: orchestration.v1.FanOutFailureBreakdown
-	(*FanOutPolicyResult)(nil),       // 33: orchestration.v1.FanOutPolicyResult
-	(*WorkflowFailure)(nil),          // 34: orchestration.v1.WorkflowFailure
-	(*ConditionalBranchRequest)(nil), // 35: orchestration.v1.ConditionalBranchRequest
-	(*InventorySnapshot)(nil),        // 36: orchestration.v1.InventorySnapshot
-	(*FulfillmentOutcome)(nil),       // 37: orchestration.v1.FulfillmentOutcome
-	(*BackorderOutcome)(nil),         // 38: orchestration.v1.BackorderOutcome
-	(*ConditionalBranchResult)(nil),  // 39: orchestration.v1.ConditionalBranchResult
-	nil,                              // 40: orchestration.v1.WorkflowFailure.MetadataEntry
-	(*timestamppb.Timestamp)(nil),    // 41: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),      // 42: google.protobuf.Duration
+	(*ActivityAttempt)(nil),          // 28: orchestration.v1.ActivityAttempt
+	(*ActivityFailure)(nil),          // 29: orchestration.v1.ActivityFailure
+	(*FaultActivityResult)(nil),      // 30: orchestration.v1.FaultActivityResult
+	(*ActivityOutcome)(nil),          // 31: orchestration.v1.ActivityOutcome
+	(*FanOutAggregate)(nil),          // 32: orchestration.v1.FanOutAggregate
+	(*FanOutFailureBreakdown)(nil),   // 33: orchestration.v1.FanOutFailureBreakdown
+	(*FanOutPolicyResult)(nil),       // 34: orchestration.v1.FanOutPolicyResult
+	(*WorkflowFailure)(nil),          // 35: orchestration.v1.WorkflowFailure
+	(*ConditionalBranchRequest)(nil), // 36: orchestration.v1.ConditionalBranchRequest
+	(*InventorySnapshot)(nil),        // 37: orchestration.v1.InventorySnapshot
+	(*FulfillmentOutcome)(nil),       // 38: orchestration.v1.FulfillmentOutcome
+	(*BackorderOutcome)(nil),         // 39: orchestration.v1.BackorderOutcome
+	(*ConditionalBranchResult)(nil),  // 40: orchestration.v1.ConditionalBranchResult
+	nil,                              // 41: orchestration.v1.WorkflowFailure.MetadataEntry
+	(*timestamppb.Timestamp)(nil),    // 42: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),      // 43: google.protobuf.Duration
 }
 var file_orchestration_v1_workflows_proto_depIdxs = []int32{
 	0,  // 0: orchestration.v1.OperationStatus.state:type_name -> orchestration.v1.OperationState
 	10, // 1: orchestration.v1.OperationStatus.progress:type_name -> orchestration.v1.OperationProgress
 	1,  // 2: orchestration.v1.OperationStatus.available_actions:type_name -> orchestration.v1.OperationAction
-	41, // 3: orchestration.v1.WaitResult.started_at:type_name -> google.protobuf.Timestamp
-	41, // 4: orchestration.v1.WaitResult.finished_at:type_name -> google.protobuf.Timestamp
-	42, // 5: orchestration.v1.WaitResult.elapsed:type_name -> google.protobuf.Duration
-	42, // 6: orchestration.v1.SimpleDiamondRequest.prepare_duration:type_name -> google.protobuf.Duration
-	42, // 7: orchestration.v1.SimpleDiamondRequest.branch_a_duration:type_name -> google.protobuf.Duration
-	42, // 8: orchestration.v1.SimpleDiamondRequest.branch_b_duration:type_name -> google.protobuf.Duration
-	42, // 9: orchestration.v1.SimpleDiamondRequest.finalize_duration:type_name -> google.protobuf.Duration
-	41, // 10: orchestration.v1.SimpleDiamondResult.started_at:type_name -> google.protobuf.Timestamp
-	41, // 11: orchestration.v1.SimpleDiamondResult.finished_at:type_name -> google.protobuf.Timestamp
-	42, // 12: orchestration.v1.SimpleDiamondResult.elapsed:type_name -> google.protobuf.Duration
+	42, // 3: orchestration.v1.WaitResult.started_at:type_name -> google.protobuf.Timestamp
+	42, // 4: orchestration.v1.WaitResult.finished_at:type_name -> google.protobuf.Timestamp
+	43, // 5: orchestration.v1.WaitResult.elapsed:type_name -> google.protobuf.Duration
+	43, // 6: orchestration.v1.SimpleDiamondRequest.prepare_duration:type_name -> google.protobuf.Duration
+	43, // 7: orchestration.v1.SimpleDiamondRequest.branch_a_duration:type_name -> google.protobuf.Duration
+	43, // 8: orchestration.v1.SimpleDiamondRequest.branch_b_duration:type_name -> google.protobuf.Duration
+	43, // 9: orchestration.v1.SimpleDiamondRequest.finalize_duration:type_name -> google.protobuf.Duration
+	42, // 10: orchestration.v1.SimpleDiamondResult.started_at:type_name -> google.protobuf.Timestamp
+	42, // 11: orchestration.v1.SimpleDiamondResult.finished_at:type_name -> google.protobuf.Timestamp
+	43, // 12: orchestration.v1.SimpleDiamondResult.elapsed:type_name -> google.protobuf.Duration
 	14, // 13: orchestration.v1.SimpleDiamondResult.nodes:type_name -> orchestration.v1.WaitResult
-	42, // 14: orchestration.v1.DynamicFanOutRequest.branch_duration:type_name -> google.protobuf.Duration
-	42, // 15: orchestration.v1.DynamicFanOutRequest.finalize_duration:type_name -> google.protobuf.Duration
-	41, // 16: orchestration.v1.DynamicFanOutResult.started_at:type_name -> google.protobuf.Timestamp
-	41, // 17: orchestration.v1.DynamicFanOutResult.finished_at:type_name -> google.protobuf.Timestamp
-	42, // 18: orchestration.v1.DynamicFanOutResult.elapsed:type_name -> google.protobuf.Duration
-	41, // 19: orchestration.v1.DynamicFanOutResult.first_branch_started_at:type_name -> google.protobuf.Timestamp
-	41, // 20: orchestration.v1.DynamicFanOutResult.last_branch_finished_at:type_name -> google.protobuf.Timestamp
+	43, // 14: orchestration.v1.DynamicFanOutRequest.branch_duration:type_name -> google.protobuf.Duration
+	43, // 15: orchestration.v1.DynamicFanOutRequest.finalize_duration:type_name -> google.protobuf.Duration
+	42, // 16: orchestration.v1.DynamicFanOutResult.started_at:type_name -> google.protobuf.Timestamp
+	42, // 17: orchestration.v1.DynamicFanOutResult.finished_at:type_name -> google.protobuf.Timestamp
+	43, // 18: orchestration.v1.DynamicFanOutResult.elapsed:type_name -> google.protobuf.Duration
+	42, // 19: orchestration.v1.DynamicFanOutResult.first_branch_started_at:type_name -> google.protobuf.Timestamp
+	42, // 20: orchestration.v1.DynamicFanOutResult.last_branch_finished_at:type_name -> google.protobuf.Timestamp
 	14, // 21: orchestration.v1.DynamicFanOutResult.finalize:type_name -> orchestration.v1.WaitResult
-	42, // 22: orchestration.v1.ReusableArtifactRequest.heavy_work_duration:type_name -> google.protobuf.Duration
+	43, // 22: orchestration.v1.ReusableArtifactRequest.heavy_work_duration:type_name -> google.protobuf.Duration
 	2,  // 23: orchestration.v1.ReusableArtifactRequest.failure_case:type_name -> orchestration.v1.ReusableArtifactFailureCase
 	20, // 24: orchestration.v1.ReusableArtifactResult.artifacts:type_name -> orchestration.v1.ArtifactReference
-	42, // 25: orchestration.v1.DurableReportRequest.heavy_work_duration:type_name -> google.protobuf.Duration
+	43, // 25: orchestration.v1.DurableReportRequest.heavy_work_duration:type_name -> google.protobuf.Duration
 	3,  // 26: orchestration.v1.DurableReportRequest.failure_case:type_name -> orchestration.v1.DurableReportFailureCase
 	6,  // 27: orchestration.v1.FaultCampaignSpec.type:type_name -> orchestration.v1.FaultCampaignType
 	24, // 28: orchestration.v1.FaultCampaignSpec.background_probabilities:type_name -> orchestration.v1.OutcomeProbabilities
 	5,  // 29: orchestration.v1.FaultBranchSpec.mode:type_name -> orchestration.v1.FaultMode
-	42, // 30: orchestration.v1.FaultBranchSpec.work_duration:type_name -> google.protobuf.Duration
-	42, // 31: orchestration.v1.FaultBranchSpec.stall_duration:type_name -> google.protobuf.Duration
+	43, // 30: orchestration.v1.FaultBranchSpec.work_duration:type_name -> google.protobuf.Duration
+	43, // 31: orchestration.v1.FaultBranchSpec.stall_duration:type_name -> google.protobuf.Duration
 	4,  // 32: orchestration.v1.FanOutPolicyRequest.policy:type_name -> orchestration.v1.AggregationPolicy
 	26, // 33: orchestration.v1.FanOutPolicyRequest.branches:type_name -> orchestration.v1.FaultBranchSpec
 	25, // 34: orchestration.v1.FanOutPolicyRequest.campaign:type_name -> orchestration.v1.FaultCampaignSpec
 	7,  // 35: orchestration.v1.ActivityFailure.kind:type_name -> orchestration.v1.ActivityFailureKind
 	5,  // 36: orchestration.v1.FaultActivityResult.outcome:type_name -> orchestration.v1.FaultMode
-	41, // 37: orchestration.v1.FaultActivityResult.started_at:type_name -> google.protobuf.Timestamp
-	41, // 38: orchestration.v1.FaultActivityResult.finished_at:type_name -> google.protobuf.Timestamp
-	42, // 39: orchestration.v1.FaultActivityResult.elapsed:type_name -> google.protobuf.Duration
-	29, // 40: orchestration.v1.ActivityOutcome.result:type_name -> orchestration.v1.FaultActivityResult
-	28, // 41: orchestration.v1.ActivityOutcome.failure:type_name -> orchestration.v1.ActivityFailure
+	42, // 37: orchestration.v1.FaultActivityResult.started_at:type_name -> google.protobuf.Timestamp
+	42, // 38: orchestration.v1.FaultActivityResult.finished_at:type_name -> google.protobuf.Timestamp
+	43, // 39: orchestration.v1.FaultActivityResult.elapsed:type_name -> google.protobuf.Duration
+	30, // 40: orchestration.v1.ActivityOutcome.result:type_name -> orchestration.v1.FaultActivityResult
+	29, // 41: orchestration.v1.ActivityOutcome.failure:type_name -> orchestration.v1.ActivityFailure
 	4,  // 42: orchestration.v1.FanOutPolicyResult.policy:type_name -> orchestration.v1.AggregationPolicy
-	41, // 43: orchestration.v1.FanOutPolicyResult.started_at:type_name -> google.protobuf.Timestamp
-	41, // 44: orchestration.v1.FanOutPolicyResult.finished_at:type_name -> google.protobuf.Timestamp
-	42, // 45: orchestration.v1.FanOutPolicyResult.elapsed:type_name -> google.protobuf.Duration
+	42, // 43: orchestration.v1.FanOutPolicyResult.started_at:type_name -> google.protobuf.Timestamp
+	42, // 44: orchestration.v1.FanOutPolicyResult.finished_at:type_name -> google.protobuf.Timestamp
+	43, // 45: orchestration.v1.FanOutPolicyResult.elapsed:type_name -> google.protobuf.Duration
 	6,  // 46: orchestration.v1.FanOutPolicyResult.campaign_type:type_name -> orchestration.v1.FaultCampaignType
-	31, // 47: orchestration.v1.FanOutPolicyResult.aggregate:type_name -> orchestration.v1.FanOutAggregate
-	32, // 48: orchestration.v1.FanOutPolicyResult.failure_breakdown:type_name -> orchestration.v1.FanOutFailureBreakdown
-	30, // 49: orchestration.v1.FanOutPolicyResult.samples:type_name -> orchestration.v1.ActivityOutcome
-	30, // 50: orchestration.v1.FanOutPolicyResult.fail_fast_trigger:type_name -> orchestration.v1.ActivityOutcome
+	32, // 47: orchestration.v1.FanOutPolicyResult.aggregate:type_name -> orchestration.v1.FanOutAggregate
+	33, // 48: orchestration.v1.FanOutPolicyResult.failure_breakdown:type_name -> orchestration.v1.FanOutFailureBreakdown
+	31, // 49: orchestration.v1.FanOutPolicyResult.samples:type_name -> orchestration.v1.ActivityOutcome
+	31, // 50: orchestration.v1.FanOutPolicyResult.fail_fast_trigger:type_name -> orchestration.v1.ActivityOutcome
 	8,  // 51: orchestration.v1.WorkflowFailure.category:type_name -> orchestration.v1.FailureCategory
-	40, // 52: orchestration.v1.WorkflowFailure.metadata:type_name -> orchestration.v1.WorkflowFailure.MetadataEntry
+	41, // 52: orchestration.v1.WorkflowFailure.metadata:type_name -> orchestration.v1.WorkflowFailure.MetadataEntry
 	9,  // 53: orchestration.v1.ConditionalBranchResult.path:type_name -> orchestration.v1.OrderPath
-	36, // 54: orchestration.v1.ConditionalBranchResult.inventory:type_name -> orchestration.v1.InventorySnapshot
-	37, // 55: orchestration.v1.ConditionalBranchResult.fulfillment:type_name -> orchestration.v1.FulfillmentOutcome
-	38, // 56: orchestration.v1.ConditionalBranchResult.backorder:type_name -> orchestration.v1.BackorderOutcome
-	41, // 57: orchestration.v1.ConditionalBranchResult.started_at:type_name -> google.protobuf.Timestamp
-	41, // 58: orchestration.v1.ConditionalBranchResult.finished_at:type_name -> google.protobuf.Timestamp
-	42, // 59: orchestration.v1.ConditionalBranchResult.elapsed:type_name -> google.protobuf.Duration
+	37, // 54: orchestration.v1.ConditionalBranchResult.inventory:type_name -> orchestration.v1.InventorySnapshot
+	38, // 55: orchestration.v1.ConditionalBranchResult.fulfillment:type_name -> orchestration.v1.FulfillmentOutcome
+	39, // 56: orchestration.v1.ConditionalBranchResult.backorder:type_name -> orchestration.v1.BackorderOutcome
+	42, // 57: orchestration.v1.ConditionalBranchResult.started_at:type_name -> google.protobuf.Timestamp
+	42, // 58: orchestration.v1.ConditionalBranchResult.finished_at:type_name -> google.protobuf.Timestamp
+	43, // 59: orchestration.v1.ConditionalBranchResult.elapsed:type_name -> google.protobuf.Duration
 	60, // [60:60] is the sub-list for method output_type
 	60, // [60:60] is the sub-list for method input_type
 	60, // [60:60] is the sub-list for extension type_name
@@ -3197,7 +3258,7 @@ func file_orchestration_v1_workflows_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_orchestration_v1_workflows_proto_rawDesc), len(file_orchestration_v1_workflows_proto_rawDesc)),
 			NumEnums:      10,
-			NumMessages:   31,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

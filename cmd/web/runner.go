@@ -70,11 +70,8 @@ func (s *server) awaitWorkflow(ctx context.Context, descriptor runDescriptor) (*
 	run := s.temporal.GetWorkflow(ctx, descriptor.WorkflowID, descriptor.RunID)
 	result := definition.NewResult()
 	workflowErr := run.Get(ctx, result)
-	if workflowErr != nil {
-		if errors.Is(workflowErr, context.Canceled) || errors.Is(workflowErr, context.DeadlineExceeded) || ctx.Err() != nil {
-			return nil, workflowErr
-		}
-		extractFailureResult(workflowErr, result)
+	if workflowErr != nil && (errors.Is(workflowErr, context.Canceled) || errors.Is(workflowErr, context.DeadlineExceeded) || ctx.Err() != nil) {
+		return nil, workflowErr
 	}
 	return s.buildResponse(descriptor.Workflow, run, descriptor.StartedAt, result, workflowErr)
 }
@@ -101,7 +98,7 @@ func (s *server) buildResponse(key string, run client.WorkflowRun, started time.
 		return response, nil
 	}
 
-	failure := toFailure(workflowErr)
+	failure := decodeWorkflowFailure(workflowErr, result)
 	encodedFailure, err := protojson.Marshal(failure)
 	if err != nil {
 		return nil, fmt.Errorf("encode workflow failure: %w", err)
@@ -114,22 +111,15 @@ func (s *server) buildResponse(key string, run client.WorkflowRun, started time.
 	return response, nil
 }
 
-func extractFailureResult(err error, result proto.Message) {
-	var appErr *temporal.ApplicationError
-	if !errors.As(err, &appErr) || !appErr.HasDetails() {
-		return
-	}
-	var failure orchestrationv1.WorkflowFailure
-	if appErr.Details(&failure, result) != nil {
-		_ = appErr.Details(result)
-	}
-}
-
-func toFailure(err error) *orchestrationv1.WorkflowFailure {
+// decodeWorkflowFailure reads the product failure contract, and any partial result the
+// Workflow attached alongside it, from one error. A Workflow attaches the failure first
+// and the result second: the SDK leaves surplus decode targets untouched and still reports
+// success, so the order is the contract and cannot be inferred from what arrives.
+func decodeWorkflowFailure(err error, result proto.Message) *orchestrationv1.WorkflowFailure {
 	var appErr *temporal.ApplicationError
 	if errors.As(err, &appErr) {
 		var failure orchestrationv1.WorkflowFailure
-		if appErr.HasDetails() && appErr.Details(&failure) == nil && failure.Code != "" {
+		if appErr.HasDetails() && appErr.Details(&failure, result) == nil && failure.Code != "" {
 			return &failure
 		}
 		return &orchestrationv1.WorkflowFailure{

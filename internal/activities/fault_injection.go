@@ -68,7 +68,7 @@ func FaultInjectionActivity(ctx context.Context, input FaultActivityInput) (Faul
 		}, nil
 	}
 	canceled := func() (FaultActivityResult, error) {
-		return FaultActivityResult{}, temporal.NewCanceledError(input.Name, info.Attempt)
+		return FaultActivityResult{}, temporal.NewCanceledError(Attempt(ctx))
 	}
 
 	switch mode {
@@ -85,8 +85,7 @@ func FaultInjectionActivity(ctx context.Context, input FaultActivityInput) (Faul
 		return FaultActivityResult{}, temporal.NewApplicationError(
 			"injected retryable failure",
 			InjectedRetryableFailureErrorType,
-			input.Name,
-			info.Attempt,
+			Attempt(ctx),
 		)
 
 	case orchestrationv1.FaultMode_FAULT_MODE_NON_RETRYABLE_FAILURE:
@@ -97,8 +96,7 @@ func FaultInjectionActivity(ctx context.Context, input FaultActivityInput) (Faul
 			"injected non-retryable failure",
 			"InjectedNonRetryableFailure",
 			nil,
-			input.Name,
-			info.Attempt,
+			Attempt(ctx),
 		)
 
 	case orchestrationv1.FaultMode_FAULT_MODE_PANIC:
@@ -109,8 +107,10 @@ func FaultInjectionActivity(ctx context.Context, input FaultActivityInput) (Faul
 
 	case orchestrationv1.FaultMode_FAULT_MODE_START_TO_CLOSE_TIMEOUT,
 		orchestrationv1.FaultMode_FAULT_MODE_HEARTBEAT_TIMEOUT:
-		// Both deadlines are breached the same way: stop heartbeating and outlive them.
-		// Temporal decides the outcome; a result here means the deadline never fired.
+		// Both deadlines are breached the same way: report once, go silent, and outlive
+		// them. The heartbeat is what carries the attempt into the timeout Temporal
+		// raises. A result here means the deadline never fired.
+		activity.RecordHeartbeat(ctx, Attempt(ctx))
 		stall(input.StallDuration)
 		return result()
 
@@ -120,10 +120,10 @@ func FaultInjectionActivity(ctx context.Context, input FaultActivityInput) (Faul
 
 	default:
 		return FaultActivityResult{}, temporal.NewNonRetryableApplicationError(
-			"unsupported fault mode",
+			"unsupported fault mode "+mode.String(),
 			"InvalidFaultMode",
 			nil,
-			mode.String(),
+			Attempt(ctx),
 		)
 	}
 }
@@ -143,7 +143,7 @@ func work(ctx context.Context, duration time.Duration) error {
 		case <-timer.C:
 			return nil
 		case <-ticker.C:
-			activity.RecordHeartbeat(ctx, "working")
+			activity.RecordHeartbeat(ctx, Attempt(ctx))
 		case <-ctx.Done():
 			return ctx.Err()
 		}

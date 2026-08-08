@@ -205,6 +205,15 @@ enum ActivityFailureKind {
   ACTIVITY_FAILURE_KIND_UNKNOWN = 5;
 }
 
+// Attached to every Activity heartbeat and failure so a Workflow can report which attempt
+// produced a terminal outcome. It is one typed value on purpose: the SDK leaves surplus
+// decode targets untouched and still reports success, so a positional detail list cannot
+// be validated and quietly reports attempt zero when the shapes drift.
+message ActivityAttempt {
+  string activity_id = 1;
+  int32 attempt = 2;
+}
+
 message ActivityFailure {
   ActivityFailureKind kind = 1;
   string message = 2;
