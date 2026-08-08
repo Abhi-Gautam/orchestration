@@ -117,8 +117,3 @@ func ConditionalBranchWorkflow(ctx workflow.Context, input *orchestrationv1.Cond
 	result.Elapsed = durationpb.New(finishedAt.Sub(startedAt))
 	return result, nil
 }
-
-func withActivityID(base workflow.ActivityOptions, activityID string) workflow.ActivityOptions {
-	base.ActivityID = activityID
-	return base
-}

@@ -17,12 +17,6 @@ const (
 	durableReportActivityCount = durableReportArtifactCount + 2
 )
 
-type durableReportArtifactExecution struct {
-	index      int
-	activityID string
-	future     workflow.Future
-}
-
 func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableReportRequest) (*orchestrationv1.DurableReportResult, error) {
 	heavyWorkDuration, err := workflowcatalog.ValidateDurableReportRequest(input)
 	if err != nil {
@@ -51,11 +45,11 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 		},
 	}
 	status.scheduleWork(durableReportArtifactCount)
-	producerExecutions := make([]durableReportArtifactExecution, durableReportArtifactCount)
+	producerExecutions := make([]scheduledActivity, durableReportArtifactCount)
 	for index := range producerExecutions {
 		activityID := workflowcatalog.ArtifactActivityID(index)
 		activityCtx := workflow.WithActivityOptions(ctx, withActivityID(producerOptions, activityID))
-		producerExecutions[index] = durableReportArtifactExecution{
+		producerExecutions[index] = scheduledActivity{
 			index:      index,
 			activityID: activityID,
 			future: workflow.ExecuteActivity(activityCtx, activities.GenerateArtifactActivityName, activities.GenerateArtifactInput{
@@ -97,7 +91,7 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 	}
 	if producerErr != nil {
 		status.setFailed("failed", "Report artifact generation failed")
-		return nil, durableReportFailure("REPORT_ARTIFACT_GENERATION_FAILED", "Report artifact generation failed after retries.", "generating-artifacts", producerErr)
+		return nil, reportDependencyFailure("REPORT_ARTIFACT_GENERATION_FAILED", "Report artifact generation failed after retries.", "generating-artifacts", producerErr)
 	}
 
 	status.scheduleWork(1)
@@ -126,7 +120,7 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 		}
 		status.recordFailed()
 		status.setFailed("failed", "Report artifact aggregation failed")
-		return nil, durableReportFailure("ARTIFACT_AGGREGATION_FAILED", "Report artifact aggregation failed after retries.", "aggregating", err)
+		return nil, reportDependencyFailure("ARTIFACT_AGGREGATION_FAILED", "Report artifact aggregation failed after retries.", "aggregating", err)
 	}
 
 	status.recordSucceeded()
@@ -158,9 +152,9 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 		status.setFailed("failed", "Durable report persistence failed")
 		var applicationErr *temporal.ApplicationError
 		if errors.As(err, &applicationErr) && applicationErr.Type() == activities.ReportIdempotencyConflictErrorType {
-			return nil, durableReportFailure("REPORT_IDEMPOTENCY_CONFLICT", applicationErr.Message(), "persisting", err)
+			return nil, reportConflictFailure(applicationErr.Message(), "persisting", err)
 		}
-		return nil, durableReportFailure("REPORT_PERSISTENCE_FAILED", "Durable report persistence failed after retries.", "persisting", err)
+		return nil, reportDependencyFailure("REPORT_PERSISTENCE_FAILED", "Durable report persistence failed after retries.", "persisting", err)
 	}
 
 	result := &orchestrationv1.DurableReportResult{
@@ -173,21 +167,25 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 	return result, nil
 }
 
-func durableReportFailure(code, message, stage string, err error) error {
-	failure := &orchestrationv1.WorkflowFailure{
+// reportDependencyFailure marks work that could succeed if the operation is started again.
+func reportDependencyFailure(code, message, stage string, err error) error {
+	return workflowFailure(&orchestrationv1.WorkflowFailure{
 		Code:      code,
 		Message:   message,
 		Category:  orchestrationv1.FailureCategory_FAILURE_CATEGORY_DEPENDENCY,
 		Retryable: true,
-		Metadata:  map[string]string{"stage": stage},
-	}
-	if code == "REPORT_IDEMPOTENCY_CONFLICT" {
-		failure.Category = orchestrationv1.FailureCategory_FAILURE_CATEGORY_BUSINESS
-		failure.Retryable = false
-	}
-	var applicationErr *temporal.ApplicationError
-	if errors.As(err, &applicationErr) {
-		failure.Metadata["temporalType"] = applicationErr.Type()
-	}
-	return temporal.NewNonRetryableApplicationError(message, "DurableReportFailure", nil, failure)
+		Metadata:  causeMetadata(stage, err),
+	}, nil)
+}
+
+// reportConflictFailure marks a business decision. The report ID already holds different
+// content, so starting the same operation again produces the same conflict.
+func reportConflictFailure(message, stage string, err error) error {
+	return workflowFailure(&orchestrationv1.WorkflowFailure{
+		Code:      "REPORT_IDEMPOTENCY_CONFLICT",
+		Message:   message,
+		Category:  orchestrationv1.FailureCategory_FAILURE_CATEGORY_BUSINESS,
+		Retryable: false,
+		Metadata:  causeMetadata(stage, err),
+	}, nil)
 }

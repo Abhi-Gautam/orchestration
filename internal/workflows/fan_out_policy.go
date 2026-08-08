@@ -30,12 +30,6 @@ const (
 	injectedTimeoutDeadline   = time.Second
 )
 
-type scheduledActivity struct {
-	index      int
-	activityID string
-	future     workflow.Future
-}
-
 type fanOutCollector struct {
 	result         *orchestrationv1.FanOutPolicyResult
 	status         *statusTracker
@@ -290,25 +284,23 @@ func failFastWorkflowError(result *orchestrationv1.FanOutPolicyResult) error {
 			metadata["finalAttempt"] = strconv.Itoa(int(trigger.Failure.FinalAttempt))
 		}
 	}
-	failure := &orchestrationv1.WorkflowFailure{
+	return workflowFailure(&orchestrationv1.WorkflowFailure{
 		Code:      "FAN_OUT_FAIL_FAST",
 		Message:   message,
 		Category:  orchestrationv1.FailureCategory_FAILURE_CATEGORY_DEPENDENCY,
 		Retryable: false,
 		Metadata:  metadata,
-	}
-	return temporal.NewNonRetryableApplicationError(message, "FanOutFailFast", nil, failure, result)
+	}, result)
 }
 
 func aggregateWorkflowError(result *orchestrationv1.FanOutPolicyResult) error {
 	message := fmt.Sprintf("fan-out completed with %d failures and %d cancellations", result.Failed, result.Canceled)
-	failure := &orchestrationv1.WorkflowFailure{
+	return workflowFailure(&orchestrationv1.WorkflowFailure{
 		Code:      "FAN_OUT_AGGREGATE_FAILURE",
 		Message:   message,
 		Category:  orchestrationv1.FailureCategory_FAILURE_CATEGORY_BUSINESS,
 		Retryable: false,
-	}
-	return temporal.NewNonRetryableApplicationError(message, "FanOutAggregateFailure", nil, failure, result)
+	}, result)
 }
 
 func classifyActivityFailure(ctx workflow.Context, err error) *orchestrationv1.ActivityFailure {

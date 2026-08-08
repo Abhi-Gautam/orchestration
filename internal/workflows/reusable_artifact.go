@@ -13,12 +13,6 @@ import (
 
 const reusableArtifactCount = workflowcatalog.ReusableArtifactCount
 
-type reusableArtifactExecution struct {
-	index      int
-	activityID string
-	future     workflow.Future
-}
-
 func ReusableArtifactWorkflow(ctx workflow.Context, input *orchestrationv1.ReusableArtifactRequest) (*orchestrationv1.ReusableArtifactResult, error) {
 	heavyWorkDuration, err := workflowcatalog.ValidateReusableArtifactRequest(input)
 	if err != nil {
@@ -47,22 +41,15 @@ func ReusableArtifactWorkflow(ctx workflow.Context, input *orchestrationv1.Reusa
 			MaximumAttempts:    2,
 		},
 	}
-	activityCtx := workflow.WithActivityOptions(ctx, activityOptions)
-	executions := make([]reusableArtifactExecution, reusableArtifactCount)
+	executions := make([]scheduledActivity, reusableArtifactCount)
 	for index := range executions {
 		activityID := workflowcatalog.ArtifactActivityID(index)
 		failureCase := orchestrationv1.ReusableArtifactFailureCase_REUSABLE_ARTIFACT_FAILURE_CASE_NONE
 		if activityID == input.FailureTargetActivity {
 			failureCase = input.FailureCase
 		}
-		executionCtx := workflow.WithActivityOptions(activityCtx, workflow.ActivityOptions{
-			ActivityID:          activityID,
-			StartToCloseTimeout: activityOptions.StartToCloseTimeout,
-			HeartbeatTimeout:    activityOptions.HeartbeatTimeout,
-			WaitForCancellation: activityOptions.WaitForCancellation,
-			RetryPolicy:         activityOptions.RetryPolicy,
-		})
-		executions[index] = reusableArtifactExecution{
+		executionCtx := workflow.WithActivityOptions(ctx, withActivityID(activityOptions, activityID))
+		executions[index] = scheduledActivity{
 			index:      index,
 			activityID: activityID,
 			future: workflow.ExecuteActivity(executionCtx, activities.GenerateArtifactActivityName, activities.GenerateArtifactInput{
