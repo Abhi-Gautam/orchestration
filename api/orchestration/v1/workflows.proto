@@ -175,15 +175,17 @@ message FaultCampaignSpec {
   OutcomeProbabilities background_probabilities = 4;
 }
 
+// A branch declares exactly what it demonstrates. The Workflow resolves campaign
+// probabilities into concrete modes before scheduling, so it can give each branch a
+// deadline that only the injected fault can breach.
 message FaultBranchSpec {
   string name = 1;
   FaultMode mode = 2;
   google.protobuf.Duration work_duration = 3;
   google.protobuf.Duration stall_duration = 4;
   int32 fail_until_attempt = 5;
-  int64 seed = 6;
-  google.protobuf.Duration heartbeat_interval = 7;
-  OutcomeProbabilities probabilities = 8;
+  reserved 6, 7, 8;
+  reserved "seed", "heartbeat_interval", "probabilities";
 }
 
 message FanOutPolicyRequest {

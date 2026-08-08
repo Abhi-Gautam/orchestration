@@ -3,51 +3,35 @@ package activities
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
-	"math/rand"
 	"time"
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
-)
 
-type FaultMode string
+	orchestrationv1 "orchestration/gen/orchestration/v1"
+)
 
 const (
 	InjectedRetryableFailureErrorType = "InjectedRetryableFailure"
 
-	FaultSuccess             FaultMode = "success"
-	FaultRetryableFailure    FaultMode = "retryable-failure"
-	FaultNonRetryableFailure FaultMode = "non-retryable-failure"
-	FaultPanic               FaultMode = "panic"
-	FaultStartToCloseTimeout FaultMode = "start-to-close-timeout"
-	FaultHeartbeatTimeout    FaultMode = "heartbeat-timeout"
-	FaultWaitForCancellation FaultMode = "wait-for-cancellation"
+	// The Workflow sets heartbeat deadlines well above this, so the interval only has to
+	// keep cancellation observable. The SDK throttles heartbeats to 80% of the deadline.
+	faultHeartbeatInterval = time.Second
 )
 
-type OutcomeProbabilities struct {
-	Success             int
-	RetryableFailure    int
-	NonRetryableFailure int
-	Panic               int
-	StartToCloseTimeout int
-	HeartbeatTimeout    int
-}
-
+// FaultActivityInput is a complete instruction. The Workflow resolved the branch's mode
+// before scheduling so it could match the Activity's deadlines to the injected fault.
 type FaultActivityInput struct {
-	Name              string
-	WorkDuration      time.Duration
-	StallDuration     time.Duration
-	Mode              FaultMode
-	Seed              int64
-	Probabilities     *OutcomeProbabilities
-	FailUntilAttempt  int32
-	HeartbeatInterval time.Duration
+	Name             string
+	Mode             orchestrationv1.FaultMode
+	WorkDuration     time.Duration
+	StallDuration    time.Duration
+	FailUntilAttempt int32
 }
 
 type FaultActivityResult struct {
 	Name       string
-	Outcome    FaultMode
+	Outcome    orchestrationv1.FaultMode
 	Attempt    int32
 	StartedAt  time.Time
 	FinishedAt time.Time
@@ -57,48 +41,46 @@ type FaultActivityResult struct {
 func FaultInjectionActivity(ctx context.Context, input FaultActivityInput) (FaultActivityResult, error) {
 	info := activity.GetInfo(ctx)
 	startedAt := time.Now().UTC()
-	mode, err := selectFaultMode(input, info.ActivityID, info.Attempt)
-	if err != nil {
-		return FaultActivityResult{}, temporal.NewNonRetryableApplicationError(
-			"invalid fault-injection configuration",
-			"InvalidFaultConfiguration",
-			err,
-		)
-	}
-	if mode == FaultRetryableFailure && input.FailUntilAttempt > 0 && info.Attempt > input.FailUntilAttempt {
-		mode = FaultSuccess
+
+	// fail_until_attempt 0 never recovers; N fails attempts 1..N and succeeds afterwards.
+	mode := input.Mode
+	if mode == orchestrationv1.FaultMode_FAULT_MODE_RETRYABLE_FAILURE &&
+		input.FailUntilAttempt > 0 && info.Attempt > input.FailUntilAttempt {
+		mode = orchestrationv1.FaultMode_FAULT_MODE_SUCCESS
 	}
 
-	logger := activity.GetLogger(ctx)
-	logger.Info("FaultInjectionActivity started",
+	activity.GetLogger(ctx).Info("FaultInjectionActivity started",
 		"name", input.Name,
 		"mode", mode,
 		"attempt", info.Attempt,
 		"activityId", info.ActivityID,
 	)
 
-	result := func(outcome FaultMode) FaultActivityResult {
+	result := func() (FaultActivityResult, error) {
 		finishedAt := time.Now().UTC()
 		return FaultActivityResult{
 			Name:       input.Name,
-			Outcome:    outcome,
+			Outcome:    mode,
 			Attempt:    info.Attempt,
 			StartedAt:  startedAt,
 			FinishedAt: finishedAt,
 			Elapsed:    finishedAt.Sub(startedAt),
-		}
+		}, nil
+	}
+	canceled := func() (FaultActivityResult, error) {
+		return FaultActivityResult{}, temporal.NewCanceledError(input.Name, info.Attempt)
 	}
 
 	switch mode {
-	case FaultSuccess:
-		if err := performCancellableWork(ctx, input.WorkDuration, input.HeartbeatInterval); err != nil {
-			return FaultActivityResult{}, temporal.NewCanceledError(input.Name, info.Attempt)
+	case orchestrationv1.FaultMode_FAULT_MODE_SUCCESS:
+		if work(ctx, input.WorkDuration) != nil {
+			return canceled()
 		}
-		return result(FaultSuccess), nil
+		return result()
 
-	case FaultRetryableFailure:
-		if err := performCancellableWork(ctx, input.WorkDuration, input.HeartbeatInterval); err != nil {
-			return FaultActivityResult{}, temporal.NewCanceledError(input.Name, info.Attempt)
+	case orchestrationv1.FaultMode_FAULT_MODE_RETRYABLE_FAILURE:
+		if work(ctx, input.WorkDuration) != nil {
+			return canceled()
 		}
 		return FaultActivityResult{}, temporal.NewApplicationError(
 			"injected retryable failure",
@@ -107,9 +89,9 @@ func FaultInjectionActivity(ctx context.Context, input FaultActivityInput) (Faul
 			info.Attempt,
 		)
 
-	case FaultNonRetryableFailure:
-		if err := performCancellableWork(ctx, input.WorkDuration, input.HeartbeatInterval); err != nil {
-			return FaultActivityResult{}, temporal.NewCanceledError(input.Name, info.Attempt)
+	case orchestrationv1.FaultMode_FAULT_MODE_NON_RETRYABLE_FAILURE:
+		if work(ctx, input.WorkDuration) != nil {
+			return canceled()
 		}
 		return FaultActivityResult{}, temporal.NewNonRetryableApplicationError(
 			"injected non-retryable failure",
@@ -119,113 +101,43 @@ func FaultInjectionActivity(ctx context.Context, input FaultActivityInput) (Faul
 			info.Attempt,
 		)
 
-	case FaultPanic:
-		if err := performCancellableWork(ctx, input.WorkDuration, input.HeartbeatInterval); err != nil {
-			return FaultActivityResult{}, temporal.NewCanceledError(input.Name, info.Attempt)
+	case orchestrationv1.FaultMode_FAULT_MODE_PANIC:
+		if work(ctx, input.WorkDuration) != nil {
+			return canceled()
 		}
 		panic(fmt.Sprintf("injected panic in %s on attempt %d", input.Name, info.Attempt))
 
-	case FaultStartToCloseTimeout:
-		if err := performCancellableWork(ctx, stallDuration(input), input.HeartbeatInterval); err != nil {
-			return FaultActivityResult{}, temporal.NewCanceledError(input.Name, info.Attempt)
-		}
-		return result(FaultStartToCloseTimeout), nil
+	case orchestrationv1.FaultMode_FAULT_MODE_START_TO_CLOSE_TIMEOUT,
+		orchestrationv1.FaultMode_FAULT_MODE_HEARTBEAT_TIMEOUT:
+		// Both deadlines are breached the same way: stop heartbeating and outlive them.
+		// Temporal decides the outcome; a result here means the deadline never fired.
+		stall(input.StallDuration)
+		return result()
 
-	case FaultHeartbeatTimeout:
-		activity.RecordHeartbeat(ctx, "heartbeat-before-stall", info.Attempt)
-		time.Sleep(stallDuration(input))
-		return result(FaultHeartbeatTimeout), nil
-
-	case FaultWaitForCancellation:
-		interval := input.HeartbeatInterval
-		if interval <= 0 {
-			interval = 100 * time.Millisecond
-		}
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				activity.RecordHeartbeat(ctx, "waiting-for-cancellation", info.Attempt)
-			case <-ctx.Done():
-				return FaultActivityResult{}, temporal.NewCanceledError(input.Name, info.Attempt)
-			}
-		}
+	case orchestrationv1.FaultMode_FAULT_MODE_WAIT_FOR_CANCELLATION:
+		<-ctx.Done()
+		return canceled()
 
 	default:
 		return FaultActivityResult{}, temporal.NewNonRetryableApplicationError(
 			"unsupported fault mode",
 			"InvalidFaultMode",
 			nil,
-			string(mode),
+			mode.String(),
 		)
 	}
 }
 
-func selectFaultMode(input FaultActivityInput, activityID string, attempt int32) (FaultMode, error) {
-	if input.Probabilities == nil {
-		if input.Mode == "" {
-			return FaultSuccess, nil
-		}
-		return input.Mode, nil
-	}
-
-	p := input.Probabilities
-	weights := []struct {
-		mode   FaultMode
-		weight int
-	}{
-		{FaultSuccess, p.Success},
-		{FaultRetryableFailure, p.RetryableFailure},
-		{FaultNonRetryableFailure, p.NonRetryableFailure},
-		{FaultPanic, p.Panic},
-		{FaultStartToCloseTimeout, p.StartToCloseTimeout},
-		{FaultHeartbeatTimeout, p.HeartbeatTimeout},
-	}
-
-	total := 0
-	for _, candidate := range weights {
-		if candidate.weight < 0 {
-			return "", fmt.Errorf("probability for %s cannot be negative", candidate.mode)
-		}
-		total += candidate.weight
-	}
-	if total != 100 {
-		return "", fmt.Errorf("probabilities must total 100, got %d", total)
-	}
-
-	hasher := fnv.New64a()
-	_, _ = hasher.Write([]byte(activityID))
-	seed := input.Seed + int64(hasher.Sum64()) + int64(attempt)
-	roll := rand.New(rand.NewSource(seed)).Intn(100)
-	cumulative := 0
-	for _, candidate := range weights {
-		cumulative += candidate.weight
-		if roll < cumulative {
-			return candidate.mode, nil
-		}
-	}
-	return "", fmt.Errorf("no outcome selected for roll %d", roll)
-}
-
-func performCancellableWork(ctx context.Context, duration, heartbeatInterval time.Duration) error {
+// work occupies the Activity while heartbeating, returning early once it is canceled.
+func work(ctx context.Context, duration time.Duration) error {
 	if duration <= 0 {
 		return nil
 	}
-
 	timer := time.NewTimer(duration)
 	defer timer.Stop()
-	if heartbeatInterval <= 0 {
-		select {
-		case <-timer.C:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-
-	ticker := time.NewTicker(heartbeatInterval)
+	ticker := time.NewTicker(faultHeartbeatInterval)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-timer.C:
@@ -238,9 +150,12 @@ func performCancellableWork(ctx context.Context, duration, heartbeatInterval tim
 	}
 }
 
-func stallDuration(input FaultActivityInput) time.Duration {
-	if input.StallDuration > 0 {
-		return input.StallDuration
+// stall ignores cancellation on purpose. Returning as soon as the deadline cancels the
+// context would race Temporal's own timeout, and when the Activity's response won that
+// race the same injected fault was recorded as a cancellation, which also ended the
+// retry chain early. Letting the deadline pass unanswered keeps Temporal authoritative.
+func stall(duration time.Duration) {
+	if duration > 0 {
+		time.Sleep(duration)
 	}
-	return input.WorkDuration
 }

@@ -19,7 +19,16 @@ import (
 	"orchestration/internal/activities"
 )
 
-const maxFanOutSamples = 8
+const (
+	maxFanOutSamples      = 8
+	fanOutMaximumAttempts = 3
+
+	// Deadlines sit far above the injected work so a saturated Worker cannot manufacture a
+	// timeout. Only a branch demonstrating one gets a deadline its stall can cross.
+	fanOutStartToCloseTimeout = 30 * time.Second
+	fanOutHeartbeatTimeout    = 20 * time.Second
+	injectedTimeoutDeadline   = time.Second
+)
 
 type scheduledActivity struct {
 	index      int
@@ -91,38 +100,46 @@ func FanOutPolicyWorkflow(ctx workflow.Context, input *orchestrationv1.FanOutPol
 
 func scheduleFaultActivities(ctx workflow.Context, branches []*orchestrationv1.FaultBranchSpec) []scheduledActivity {
 	scheduled := make([]scheduledActivity, len(branches))
-	for i, branch := range branches {
-		mode, _ := activityFaultMode(branch.Mode)
-		options := workflow.ActivityOptions{
-			ActivityID:             branch.Name,
-			StartToCloseTimeout:    2 * time.Second,
-			ScheduleToCloseTimeout: 2 * time.Minute,
-			HeartbeatTimeout:       500 * time.Millisecond,
-			WaitForCancellation:    true,
-			RetryPolicy: &temporal.RetryPolicy{
-				InitialInterval:    100 * time.Millisecond,
-				BackoffCoefficient: 2,
-				MaximumInterval:    500 * time.Millisecond,
-				MaximumAttempts:    3,
-			},
-		}
-		activityCtx := workflow.WithActivityOptions(ctx, options)
-		scheduled[i] = scheduledActivity{
-			index:      i,
+	for index, branch := range branches {
+		activityCtx := workflow.WithActivityOptions(ctx, faultActivityOptions(branch))
+		scheduled[index] = scheduledActivity{
+			index:      index,
 			activityID: branch.Name,
 			future: workflow.ExecuteActivity(activityCtx, activities.FaultInjectionActivity, activities.FaultActivityInput{
-				Name:              branch.Name,
-				Mode:              mode,
-				WorkDuration:      duration(branch.WorkDuration),
-				StallDuration:     duration(branch.StallDuration),
-				Seed:              branch.Seed,
-				Probabilities:     activityOutcomeProbabilities(branch.Probabilities),
-				FailUntilAttempt:  branch.FailUntilAttempt,
-				HeartbeatInterval: duration(branch.HeartbeatInterval),
+				Name:             branch.Name,
+				Mode:             branch.Mode,
+				WorkDuration:     duration(branch.WorkDuration),
+				StallDuration:    duration(branch.StallDuration),
+				FailUntilAttempt: branch.FailUntilAttempt,
 			}),
 		}
 	}
 	return scheduled
+}
+
+// faultActivityOptions matches each branch's deadlines to the fault it demonstrates. No
+// schedule-to-close deadline is set: it would include task-queue wait, so a large fan-out
+// would fail branches for being queued rather than for anything the branch did.
+func faultActivityOptions(branch *orchestrationv1.FaultBranchSpec) workflow.ActivityOptions {
+	options := workflow.ActivityOptions{
+		ActivityID:          branch.Name,
+		StartToCloseTimeout: fanOutStartToCloseTimeout,
+		HeartbeatTimeout:    fanOutHeartbeatTimeout,
+		WaitForCancellation: true,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    100 * time.Millisecond,
+			BackoffCoefficient: 2,
+			MaximumInterval:    500 * time.Millisecond,
+			MaximumAttempts:    fanOutMaximumAttempts,
+		},
+	}
+	switch branch.Mode {
+	case orchestrationv1.FaultMode_FAULT_MODE_START_TO_CLOSE_TIMEOUT:
+		options.StartToCloseTimeout = injectedTimeoutDeadline
+	case orchestrationv1.FaultMode_FAULT_MODE_HEARTBEAT_TIMEOUT:
+		options.HeartbeatTimeout = injectedTimeoutDeadline
+	}
+	return options
 }
 
 func aggregateFaultActivities(
@@ -372,71 +389,13 @@ func safeFailureMessage(message string) string {
 	return message
 }
 
-func activityFaultMode(mode orchestrationv1.FaultMode) (activities.FaultMode, bool) {
-	switch mode {
-	case orchestrationv1.FaultMode_FAULT_MODE_SUCCESS:
-		return activities.FaultSuccess, true
-	case orchestrationv1.FaultMode_FAULT_MODE_RETRYABLE_FAILURE:
-		return activities.FaultRetryableFailure, true
-	case orchestrationv1.FaultMode_FAULT_MODE_NON_RETRYABLE_FAILURE:
-		return activities.FaultNonRetryableFailure, true
-	case orchestrationv1.FaultMode_FAULT_MODE_PANIC:
-		return activities.FaultPanic, true
-	case orchestrationv1.FaultMode_FAULT_MODE_START_TO_CLOSE_TIMEOUT:
-		return activities.FaultStartToCloseTimeout, true
-	case orchestrationv1.FaultMode_FAULT_MODE_HEARTBEAT_TIMEOUT:
-		return activities.FaultHeartbeatTimeout, true
-	case orchestrationv1.FaultMode_FAULT_MODE_WAIT_FOR_CANCELLATION:
-		return activities.FaultWaitForCancellation, true
-	case orchestrationv1.FaultMode_FAULT_MODE_UNSPECIFIED:
-		return "", true
-	default:
-		return "", false
-	}
-}
-
-func protoFaultMode(mode activities.FaultMode) orchestrationv1.FaultMode {
-	switch mode {
-	case activities.FaultSuccess:
-		return orchestrationv1.FaultMode_FAULT_MODE_SUCCESS
-	case activities.FaultRetryableFailure:
-		return orchestrationv1.FaultMode_FAULT_MODE_RETRYABLE_FAILURE
-	case activities.FaultNonRetryableFailure:
-		return orchestrationv1.FaultMode_FAULT_MODE_NON_RETRYABLE_FAILURE
-	case activities.FaultPanic:
-		return orchestrationv1.FaultMode_FAULT_MODE_PANIC
-	case activities.FaultStartToCloseTimeout:
-		return orchestrationv1.FaultMode_FAULT_MODE_START_TO_CLOSE_TIMEOUT
-	case activities.FaultHeartbeatTimeout:
-		return orchestrationv1.FaultMode_FAULT_MODE_HEARTBEAT_TIMEOUT
-	case activities.FaultWaitForCancellation:
-		return orchestrationv1.FaultMode_FAULT_MODE_WAIT_FOR_CANCELLATION
-	default:
-		return orchestrationv1.FaultMode_FAULT_MODE_UNSPECIFIED
-	}
-}
-
 func faultActivityResult(result activities.FaultActivityResult) *orchestrationv1.FaultActivityResult {
 	return &orchestrationv1.FaultActivityResult{
 		Name:       result.Name,
-		Outcome:    protoFaultMode(result.Outcome),
+		Outcome:    result.Outcome,
 		Attempt:    result.Attempt,
 		StartedAt:  timestamppb.New(result.StartedAt),
 		FinishedAt: timestamppb.New(result.FinishedAt),
 		Elapsed:    durationpb.New(result.Elapsed),
-	}
-}
-
-func activityOutcomeProbabilities(probabilities *orchestrationv1.OutcomeProbabilities) *activities.OutcomeProbabilities {
-	if probabilities == nil {
-		return nil
-	}
-	return &activities.OutcomeProbabilities{
-		Success:             int(probabilities.Success),
-		RetryableFailure:    int(probabilities.RetryableFailure),
-		NonRetryableFailure: int(probabilities.NonRetryableFailure),
-		Panic:               int(probabilities.Panic),
-		StartToCloseTimeout: int(probabilities.StartToCloseTimeout),
-		HeartbeatTimeout:    int(probabilities.HeartbeatTimeout),
 	}
 }

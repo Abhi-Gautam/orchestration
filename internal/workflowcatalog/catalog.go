@@ -207,18 +207,11 @@ func durableReportDefinitionWorkflowID(message proto.Message) (string, error) {
 func fanOutPolicyExample() *orchestrationv1.FanOutPolicyRequest {
 	return &orchestrationv1.FanOutPolicyRequest{
 		Policy: orchestrationv1.AggregationPolicy_AGGREGATION_POLICY_ALL_SETTLED,
+		// background_probabilities is omitted so the Workflow's documented default applies.
 		Campaign: &orchestrationv1.FaultCampaignSpec{
 			Type:          orchestrationv1.FaultCampaignType_FAULT_CAMPAIGN_TYPE_MIXED_V1,
 			ActivityCount: 1000,
 			Seed:          4815162342,
-			BackgroundProbabilities: &orchestrationv1.OutcomeProbabilities{
-				Success:             82,
-				RetryableFailure:    8,
-				NonRetryableFailure: 3,
-				Panic:               2,
-				StartToCloseTimeout: 3,
-				HeartbeatTimeout:    2,
-			},
 		},
 	}
 }

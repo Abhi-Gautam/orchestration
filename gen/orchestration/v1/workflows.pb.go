@@ -1685,18 +1685,18 @@ func (x *FaultCampaignSpec) GetBackgroundProbabilities() *OutcomeProbabilities {
 	return nil
 }
 
+// A branch declares exactly what it demonstrates. The Workflow resolves campaign
+// probabilities into concrete modes before scheduling, so it can give each branch a
+// deadline that only the injected fault can breach.
 type FaultBranchSpec struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	Name              string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Mode              FaultMode              `protobuf:"varint,2,opt,name=mode,proto3,enum=orchestration.v1.FaultMode" json:"mode,omitempty"`
-	WorkDuration      *durationpb.Duration   `protobuf:"bytes,3,opt,name=work_duration,json=workDuration,proto3" json:"work_duration,omitempty"`
-	StallDuration     *durationpb.Duration   `protobuf:"bytes,4,opt,name=stall_duration,json=stallDuration,proto3" json:"stall_duration,omitempty"`
-	FailUntilAttempt  int32                  `protobuf:"varint,5,opt,name=fail_until_attempt,json=failUntilAttempt,proto3" json:"fail_until_attempt,omitempty"`
-	Seed              int64                  `protobuf:"varint,6,opt,name=seed,proto3" json:"seed,omitempty"`
-	HeartbeatInterval *durationpb.Duration   `protobuf:"bytes,7,opt,name=heartbeat_interval,json=heartbeatInterval,proto3" json:"heartbeat_interval,omitempty"`
-	Probabilities     *OutcomeProbabilities  `protobuf:"bytes,8,opt,name=probabilities,proto3" json:"probabilities,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Name             string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Mode             FaultMode              `protobuf:"varint,2,opt,name=mode,proto3,enum=orchestration.v1.FaultMode" json:"mode,omitempty"`
+	WorkDuration     *durationpb.Duration   `protobuf:"bytes,3,opt,name=work_duration,json=workDuration,proto3" json:"work_duration,omitempty"`
+	StallDuration    *durationpb.Duration   `protobuf:"bytes,4,opt,name=stall_duration,json=stallDuration,proto3" json:"stall_duration,omitempty"`
+	FailUntilAttempt int32                  `protobuf:"varint,5,opt,name=fail_until_attempt,json=failUntilAttempt,proto3" json:"fail_until_attempt,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *FaultBranchSpec) Reset() {
@@ -1762,27 +1762,6 @@ func (x *FaultBranchSpec) GetFailUntilAttempt() int32 {
 		return x.FailUntilAttempt
 	}
 	return 0
-}
-
-func (x *FaultBranchSpec) GetSeed() int64 {
-	if x != nil {
-		return x.Seed
-	}
-	return 0
-}
-
-func (x *FaultBranchSpec) GetHeartbeatInterval() *durationpb.Duration {
-	if x != nil {
-		return x.HeartbeatInterval
-	}
-	return nil
-}
-
-func (x *FaultBranchSpec) GetProbabilities() *OutcomeProbabilities {
-	if x != nil {
-		return x.Probabilities
-	}
-	return nil
 }
 
 type FanOutPolicyRequest struct {
@@ -2919,16 +2898,13 @@ const file_orchestration_v1_workflows_proto_rawDesc = "" +
 	"\x04type\x18\x01 \x01(\x0e2#.orchestration.v1.FaultCampaignTypeR\x04type\x12%\n" +
 	"\x0eactivity_count\x18\x02 \x01(\x05R\ractivityCount\x12\x12\n" +
 	"\x04seed\x18\x03 \x01(\x03R\x04seed\x12a\n" +
-	"\x18background_probabilities\x18\x04 \x01(\v2&.orchestration.v1.OutcomeProbabilitiesR\x17backgroundProbabilities\"\xb2\x03\n" +
+	"\x18background_probabilities\x18\x04 \x01(\v2&.orchestration.v1.OutcomeProbabilitiesR\x17backgroundProbabilities\"\xc1\x02\n" +
 	"\x0fFaultBranchSpec\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12/\n" +
 	"\x04mode\x18\x02 \x01(\x0e2\x1b.orchestration.v1.FaultModeR\x04mode\x12>\n" +
 	"\rwork_duration\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\fworkDuration\x12@\n" +
 	"\x0estall_duration\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\rstallDuration\x12,\n" +
-	"\x12fail_until_attempt\x18\x05 \x01(\x05R\x10failUntilAttempt\x12\x12\n" +
-	"\x04seed\x18\x06 \x01(\x03R\x04seed\x12H\n" +
-	"\x12heartbeat_interval\x18\a \x01(\v2\x19.google.protobuf.DurationR\x11heartbeatInterval\x12L\n" +
-	"\rprobabilities\x18\b \x01(\v2&.orchestration.v1.OutcomeProbabilitiesR\rprobabilities\"\xeb\x01\n" +
+	"\x12fail_until_attempt\x18\x05 \x01(\x05R\x10failUntilAttemptJ\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tR\x04seedR\x12heartbeat_intervalR\rprobabilities\"\xeb\x01\n" +
 	"\x13FanOutPolicyRequest\x12;\n" +
 	"\x06policy\x18\x01 \x01(\x0e2#.orchestration.v1.AggregationPolicyR\x06policy\x12=\n" +
 	"\bbranches\x18\x02 \x03(\v2!.orchestration.v1.FaultBranchSpecR\bbranches\x12?\n" +
@@ -3175,41 +3151,39 @@ var file_orchestration_v1_workflows_proto_depIdxs = []int32{
 	5,  // 29: orchestration.v1.FaultBranchSpec.mode:type_name -> orchestration.v1.FaultMode
 	42, // 30: orchestration.v1.FaultBranchSpec.work_duration:type_name -> google.protobuf.Duration
 	42, // 31: orchestration.v1.FaultBranchSpec.stall_duration:type_name -> google.protobuf.Duration
-	42, // 32: orchestration.v1.FaultBranchSpec.heartbeat_interval:type_name -> google.protobuf.Duration
-	24, // 33: orchestration.v1.FaultBranchSpec.probabilities:type_name -> orchestration.v1.OutcomeProbabilities
-	4,  // 34: orchestration.v1.FanOutPolicyRequest.policy:type_name -> orchestration.v1.AggregationPolicy
-	26, // 35: orchestration.v1.FanOutPolicyRequest.branches:type_name -> orchestration.v1.FaultBranchSpec
-	25, // 36: orchestration.v1.FanOutPolicyRequest.campaign:type_name -> orchestration.v1.FaultCampaignSpec
-	7,  // 37: orchestration.v1.ActivityFailure.kind:type_name -> orchestration.v1.ActivityFailureKind
-	5,  // 38: orchestration.v1.FaultActivityResult.outcome:type_name -> orchestration.v1.FaultMode
-	41, // 39: orchestration.v1.FaultActivityResult.started_at:type_name -> google.protobuf.Timestamp
-	41, // 40: orchestration.v1.FaultActivityResult.finished_at:type_name -> google.protobuf.Timestamp
-	42, // 41: orchestration.v1.FaultActivityResult.elapsed:type_name -> google.protobuf.Duration
-	29, // 42: orchestration.v1.ActivityOutcome.result:type_name -> orchestration.v1.FaultActivityResult
-	28, // 43: orchestration.v1.ActivityOutcome.failure:type_name -> orchestration.v1.ActivityFailure
-	4,  // 44: orchestration.v1.FanOutPolicyResult.policy:type_name -> orchestration.v1.AggregationPolicy
-	41, // 45: orchestration.v1.FanOutPolicyResult.started_at:type_name -> google.protobuf.Timestamp
-	41, // 46: orchestration.v1.FanOutPolicyResult.finished_at:type_name -> google.protobuf.Timestamp
-	42, // 47: orchestration.v1.FanOutPolicyResult.elapsed:type_name -> google.protobuf.Duration
-	6,  // 48: orchestration.v1.FanOutPolicyResult.campaign_type:type_name -> orchestration.v1.FaultCampaignType
-	31, // 49: orchestration.v1.FanOutPolicyResult.aggregate:type_name -> orchestration.v1.FanOutAggregate
-	32, // 50: orchestration.v1.FanOutPolicyResult.failure_breakdown:type_name -> orchestration.v1.FanOutFailureBreakdown
-	30, // 51: orchestration.v1.FanOutPolicyResult.samples:type_name -> orchestration.v1.ActivityOutcome
-	30, // 52: orchestration.v1.FanOutPolicyResult.fail_fast_trigger:type_name -> orchestration.v1.ActivityOutcome
-	8,  // 53: orchestration.v1.WorkflowFailure.category:type_name -> orchestration.v1.FailureCategory
-	40, // 54: orchestration.v1.WorkflowFailure.metadata:type_name -> orchestration.v1.WorkflowFailure.MetadataEntry
-	9,  // 55: orchestration.v1.ConditionalBranchResult.path:type_name -> orchestration.v1.OrderPath
-	36, // 56: orchestration.v1.ConditionalBranchResult.inventory:type_name -> orchestration.v1.InventorySnapshot
-	37, // 57: orchestration.v1.ConditionalBranchResult.fulfillment:type_name -> orchestration.v1.FulfillmentOutcome
-	38, // 58: orchestration.v1.ConditionalBranchResult.backorder:type_name -> orchestration.v1.BackorderOutcome
-	41, // 59: orchestration.v1.ConditionalBranchResult.started_at:type_name -> google.protobuf.Timestamp
-	41, // 60: orchestration.v1.ConditionalBranchResult.finished_at:type_name -> google.protobuf.Timestamp
-	42, // 61: orchestration.v1.ConditionalBranchResult.elapsed:type_name -> google.protobuf.Duration
-	62, // [62:62] is the sub-list for method output_type
-	62, // [62:62] is the sub-list for method input_type
-	62, // [62:62] is the sub-list for extension type_name
-	62, // [62:62] is the sub-list for extension extendee
-	0,  // [0:62] is the sub-list for field type_name
+	4,  // 32: orchestration.v1.FanOutPolicyRequest.policy:type_name -> orchestration.v1.AggregationPolicy
+	26, // 33: orchestration.v1.FanOutPolicyRequest.branches:type_name -> orchestration.v1.FaultBranchSpec
+	25, // 34: orchestration.v1.FanOutPolicyRequest.campaign:type_name -> orchestration.v1.FaultCampaignSpec
+	7,  // 35: orchestration.v1.ActivityFailure.kind:type_name -> orchestration.v1.ActivityFailureKind
+	5,  // 36: orchestration.v1.FaultActivityResult.outcome:type_name -> orchestration.v1.FaultMode
+	41, // 37: orchestration.v1.FaultActivityResult.started_at:type_name -> google.protobuf.Timestamp
+	41, // 38: orchestration.v1.FaultActivityResult.finished_at:type_name -> google.protobuf.Timestamp
+	42, // 39: orchestration.v1.FaultActivityResult.elapsed:type_name -> google.protobuf.Duration
+	29, // 40: orchestration.v1.ActivityOutcome.result:type_name -> orchestration.v1.FaultActivityResult
+	28, // 41: orchestration.v1.ActivityOutcome.failure:type_name -> orchestration.v1.ActivityFailure
+	4,  // 42: orchestration.v1.FanOutPolicyResult.policy:type_name -> orchestration.v1.AggregationPolicy
+	41, // 43: orchestration.v1.FanOutPolicyResult.started_at:type_name -> google.protobuf.Timestamp
+	41, // 44: orchestration.v1.FanOutPolicyResult.finished_at:type_name -> google.protobuf.Timestamp
+	42, // 45: orchestration.v1.FanOutPolicyResult.elapsed:type_name -> google.protobuf.Duration
+	6,  // 46: orchestration.v1.FanOutPolicyResult.campaign_type:type_name -> orchestration.v1.FaultCampaignType
+	31, // 47: orchestration.v1.FanOutPolicyResult.aggregate:type_name -> orchestration.v1.FanOutAggregate
+	32, // 48: orchestration.v1.FanOutPolicyResult.failure_breakdown:type_name -> orchestration.v1.FanOutFailureBreakdown
+	30, // 49: orchestration.v1.FanOutPolicyResult.samples:type_name -> orchestration.v1.ActivityOutcome
+	30, // 50: orchestration.v1.FanOutPolicyResult.fail_fast_trigger:type_name -> orchestration.v1.ActivityOutcome
+	8,  // 51: orchestration.v1.WorkflowFailure.category:type_name -> orchestration.v1.FailureCategory
+	40, // 52: orchestration.v1.WorkflowFailure.metadata:type_name -> orchestration.v1.WorkflowFailure.MetadataEntry
+	9,  // 53: orchestration.v1.ConditionalBranchResult.path:type_name -> orchestration.v1.OrderPath
+	36, // 54: orchestration.v1.ConditionalBranchResult.inventory:type_name -> orchestration.v1.InventorySnapshot
+	37, // 55: orchestration.v1.ConditionalBranchResult.fulfillment:type_name -> orchestration.v1.FulfillmentOutcome
+	38, // 56: orchestration.v1.ConditionalBranchResult.backorder:type_name -> orchestration.v1.BackorderOutcome
+	41, // 57: orchestration.v1.ConditionalBranchResult.started_at:type_name -> google.protobuf.Timestamp
+	41, // 58: orchestration.v1.ConditionalBranchResult.finished_at:type_name -> google.protobuf.Timestamp
+	42, // 59: orchestration.v1.ConditionalBranchResult.elapsed:type_name -> google.protobuf.Duration
+	60, // [60:60] is the sub-list for method output_type
+	60, // [60:60] is the sub-list for method input_type
+	60, // [60:60] is the sub-list for extension type_name
+	60, // [60:60] is the sub-list for extension extendee
+	0,  // [0:60] is the sub-list for field type_name
 }
 
 func init() { file_orchestration_v1_workflows_proto_init() }
