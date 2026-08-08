@@ -9,13 +9,13 @@
 >
   <div class="result-header">
     <div>
-      <p class="section-kicker">In flight</p>
+      <p class="section-kicker" data-run-kicker>{{if .Attached}}Joined in flight{{else}}In flight{{end}}</p>
       <h2 data-run-name>{{.WorkflowName}}</h2>
     </div>
     <span class="status-badge status-warning" data-run-status>Running</span>
   </div>
 
-  <p class="result-message" role="status" data-run-message>The workflow started and is being monitored for progress.</p>
+  <p class="result-message" role="status" data-run-message>{{if .Attached}}This request joined a run already in flight for the same business key.{{else}}The workflow started and is being monitored for progress.{{end}}</p>
 
   <div class="progress-block" data-run-progress>
     <div class="progress-label">

@@ -44,6 +44,14 @@ A successful start returns `202 Accepted`:
 }
 ```
 
+## Business keys and attach
+
+Most Workflows get a fresh Workflow ID per start. A Workflow whose identity comes from its input derives its Workflow ID from that input instead, so the same operation always names the same execution.
+
+Starting one whose execution is already running joins it: the response carries that execution's `runId` and adds `"attached": true`. The field is absent when this call created the run. A caller that repeats a request therefore observes one execution rather than racing a second one beside it, and can tell which of the two happened.
+
+An execution that has already closed does not block a new one; a repeated business key then starts a fresh run. Reuse of the completed work is the Activity's decision, not the start's.
+
 The body limit is 1 MiB. Unknown top-level fields and multiple JSON values are rejected.
 
 `input` uses protobuf JSON: field names are lower camel case, enums use symbolic names, durations and timestamps use protobuf formats, and 64-bit integers are JSON strings. Unknown protobuf fields are rejected.

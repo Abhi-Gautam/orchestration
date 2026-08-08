@@ -575,7 +575,14 @@ function workflowLab() {
       const key = this.runKey(descriptor);
       this.activeRuns = [descriptor, ...this.activeRuns.filter((run) => this.runKey(run) !== key)].slice(0, maxEventRuns);
       this.persistActiveRuns();
-      this.ensureRunCard(descriptor);
+      // attached describes this start, not the run being monitored, so it stays out of the
+      // stored descriptor and is shown once against the card it produced.
+      const card = this.ensureRunCard(descriptor);
+      if (card && detail.attached) {
+        card.querySelector("[data-run-kicker]").textContent = "Joined in flight";
+        card.querySelector("[data-run-message]").textContent =
+          "This request joined a run already in flight for the same business key.";
+      }
       this.connectEvents();
     },
 

@@ -22,11 +22,14 @@ type runRequest struct {
 }
 
 type runDescriptor struct {
-	Workflow      string    `json:"workflow"`
-	WorkflowName  string    `json:"workflowName"`
-	Status        string    `json:"status"`
-	WorkflowID    string    `json:"workflowId"`
-	RunID         string    `json:"runId"`
+	Workflow     string `json:"workflow"`
+	WorkflowName string `json:"workflowName"`
+	Status       string `json:"status"`
+	WorkflowID   string `json:"workflowId"`
+	RunID        string `json:"runId"`
+	// Attached reports that this start joined an execution already in flight under the
+	// same business key rather than creating one.
+	Attached      bool      `json:"attached,omitempty"`
 	StartedAt     time.Time `json:"startedAt"`
 	TemporalUIURL string    `json:"temporalUiUrl"`
 }

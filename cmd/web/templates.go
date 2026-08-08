@@ -29,6 +29,7 @@ type runPendingView struct {
 	Workflow      string
 	WorkflowID    string
 	RunID         string
+	Attached      bool
 	StartedAt     string
 	TemporalUIURL string
 }
@@ -84,6 +85,7 @@ func buildRunPendingView(descriptor *runDescriptor) runPendingView {
 		Workflow:      descriptor.Workflow,
 		WorkflowID:    descriptor.WorkflowID,
 		RunID:         descriptor.RunID,
+		Attached:      descriptor.Attached,
 		StartedAt:     formatTime(descriptor.StartedAt),
 		TemporalUIURL: descriptor.TemporalUIURL,
 	}

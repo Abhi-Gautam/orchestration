@@ -2,14 +2,20 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"time"
 
+	commonpb "go.temporal.io/api/common/v1"
 	enumspb "go.temporal.io/api/enums/v1"
+	taskqueuepb "go.temporal.io/api/taskqueue/v1"
+	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/temporal"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -17,6 +23,9 @@ import (
 	orchestrationv1 "orchestration/gen/orchestration/v1"
 	"orchestration/internal/workflowcatalog"
 )
+
+// startIdentity marks starts issued by the web process in Temporal's execution record.
+const startIdentity = "orchestration-web"
 
 func (s *server) startWorkflow(ctx context.Context, key string, rawInput json.RawMessage) (*runDescriptor, error) {
 	definition, ok := workflowcatalog.FindDefinition(key)
@@ -29,23 +38,13 @@ func (s *server) startWorkflow(ctx context.Context, key string, rawInput json.Ra
 		return nil, &inputError{message: fmt.Sprintf("Invalid workflow input: %s", sanitizeDecodeError(err))}
 	}
 
-	workflowID := uniqueWorkflowID(key)
-	workflowIDReusePolicy := enumspb.WORKFLOW_ID_REUSE_POLICY_UNSPECIFIED
-	if definition.WorkflowID != nil {
-		resolvedWorkflowID, resolveErr := definition.WorkflowID(input)
-		if resolveErr != nil {
-			return nil, &inputError{message: fmt.Sprintf("Invalid workflow input: %s", resolveErr)}
-		}
-		workflowID = resolvedWorkflowID
-		workflowIDReusePolicy = enumspb.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE
+	request, err := s.startRequest(definition, input)
+	if err != nil {
+		return nil, err
 	}
 
 	startedAt := time.Now().UTC()
-	run, err := s.temporal.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID:                    workflowID,
-		TaskQueue:             s.taskQueue,
-		WorkflowIDReusePolicy: workflowIDReusePolicy,
-	}, definition.TemporalName, input)
+	response, err := s.temporal.WorkflowService().StartWorkflowExecution(ctx, request)
 	if err != nil {
 		return nil, &startError{message: "Failed to start the workflow.", cause: err}
 	}
@@ -54,11 +53,63 @@ func (s *server) startWorkflow(ctx context.Context, key string, rawInput json.Ra
 		Workflow:      key,
 		WorkflowName:  definition.Name,
 		Status:        "running",
-		WorkflowID:    run.GetID(),
-		RunID:         run.GetRunID(),
+		WorkflowID:    request.WorkflowId,
+		RunID:         response.GetRunId(),
+		Attached:      !response.GetStarted(),
 		StartedAt:     startedAt,
-		TemporalUIURL: s.temporalRunURL(run.GetID(), run.GetRunID()),
+		TemporalUIURL: s.temporalRunURL(request.WorkflowId, response.GetRunId()),
 	}, nil
+}
+
+// startRequest builds the start directly rather than through ExecuteWorkflow, because the
+// SDK does not surface whether the server created a new execution or handed back one
+// already running. For a business-keyed operation that answer is the point of the call, and
+// only the server can give it without racing another caller.
+func (s *server) startRequest(definition workflowcatalog.Definition, input proto.Message) (*workflowservice.StartWorkflowExecutionRequest, error) {
+	workflowID := uniqueWorkflowID(definition.ID)
+	conflictPolicy := enumspb.WORKFLOW_ID_CONFLICT_POLICY_FAIL
+	if definition.WorkflowID != nil {
+		resolved, err := definition.WorkflowID(input)
+		if err != nil {
+			return nil, &inputError{message: fmt.Sprintf("Invalid workflow input: %s", err)}
+		}
+		// The Workflow ID is the operation's identity, so a second caller of work already
+		// in flight joins that execution instead of starting a rival one beside it.
+		workflowID = resolved
+		conflictPolicy = enumspb.WORKFLOW_ID_CONFLICT_POLICY_USE_EXISTING
+	}
+
+	payloads, err := converter.GetDefaultDataConverter().ToPayloads(input)
+	if err != nil {
+		return nil, fmt.Errorf("encode workflow input: %w", err)
+	}
+	requestID, err := newRequestID()
+	if err != nil {
+		return nil, err
+	}
+
+	return &workflowservice.StartWorkflowExecutionRequest{
+		Namespace:                s.namespace,
+		WorkflowId:               workflowID,
+		WorkflowType:             &commonpb.WorkflowType{Name: definition.TemporalName},
+		TaskQueue:                &taskqueuepb.TaskQueue{Name: s.taskQueue, Kind: enumspb.TASK_QUEUE_KIND_NORMAL},
+		Input:                    payloads,
+		Identity:                 startIdentity,
+		RequestId:                requestID,
+		WorkflowIdReusePolicy:    enumspb.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE,
+		WorkflowIdConflictPolicy: conflictPolicy,
+	}, nil
+}
+
+// newRequestID gives every start its own request. Temporal treats a repeated request ID as
+// a retry of the first call and replays its response, which would report a caller that
+// joined an existing run as having started it.
+func newRequestID() (string, error) {
+	var buffer [16]byte
+	if _, err := rand.Read(buffer[:]); err != nil {
+		return "", fmt.Errorf("generate start request id: %w", err)
+	}
+	return hex.EncodeToString(buffer[:]), nil
 }
 
 func (s *server) awaitWorkflow(ctx context.Context, descriptor runDescriptor) (*runResponse, error) {
