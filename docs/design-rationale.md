@@ -28,13 +28,19 @@ One ownership rule generates every other rule in this repository:
 
 ## Failure mode to experiment
 
-Each Workflow here isolates one execution concern and runs against a real stack. The final column states what the repository currently contains, not a benchmark result.
+Each Workflow here isolates one execution concern and runs against a real stack. The final column separates what was observed from what was argued:
+
+- **Demonstrated** — a run on the real stack shows the corrected behavior.
+- **Structural** — the defect cannot occur because the thing it needs does not exist.
+- **Reasoned** — the mechanism is understood and the design follows from it, but no run has exhibited the failure.
 
 | Failure mode | Answer in this repository | State |
 |---|---|---|
 | Failures recorded as rows; execution reports success | Structured protobuf failures raised as Application Errors (`internal/workflows/failure.go`), classified Activity error types, terminal failure decoding in web | Demonstrated |
 | Results routed by best-effort signals | Branch results awaited as futures (`simple_diamond.go`, `dynamic_fan_out.go`) | Demonstrated |
-| Retry behavior differing by dispatcher; unset attempt limits meaning unlimited | Explicit per-Activity retry and timeout configuration across a 1,000-branch fault-injection campaign (`fan_out_policy.go`, `fan_out_campaign.go`) | Demonstrated |
+| Retry behavior differing by dispatcher; unset attempt limits meaning unlimited | One explicit retry policy per branch. The 1,000-branch campaign reports retry exhaustion and recovery-after-retry as distinct outcomes (`fan_out_policy.go`, `fan_out_campaign.go`) | Demonstrated |
+| The same injected fault classified differently across runs | Branch behavior resolved in the Workflow before scheduling, and no Activity answers its own expired deadline with a cancellation (`fan_out_campaign.go`, `fault_injection.go`) | Demonstrated |
+| Deadlines coupling an outcome to Worker load | Deadlines set from the work each branch does, and no schedule-to-close deadline (`fan_out_policy.go`) | Reasoned |
 | Terminal failure semantics undefined for fan-out | Three named policies with stated aggregation and cancellation behavior | Demonstrated |
 | Deduplication layers competing | Business-key identity: artifact keys exclude Run ID, attempt, and Build ID; a durable report reuses a matching row and rejects a conflicting one (`reusable_artifact.go`, `durable_report.go`) | Demonstrated |
 | Execution state duplicated in application tables | No application run database. Temporal holds execution state; SQLite holds business records only | Structural |
@@ -42,6 +48,12 @@ Each Workflow here isolates one execution concern and runs against a real stack.
 | Static capability flags drifting from runtime behavior | The running Workflow returns the actions valid in its current state; the registry carries start contracts only | Structural |
 | Large payloads travelling through execution history | References to object storage and durable records; bounded aggregates and sampled failures | Demonstrated |
 | Documentation describing intent as behavior | Every document carries a status line and states what is not implemented | Structural |
+
+### The deadline rule is reasoned, and one negative result
+
+The fan-out previously gave every branch a heartbeat deadline close to its heartbeat interval. That margin was thin by inspection, but it was not observed to misfire: on the old configuration, 1,000, 4,000 and 8,000 concurrent Activities all settled without a single unplanned timeout, with elapsed time growing from 7 to 45 seconds. Saturation produced queueing, and queueing does not count against a start-to-close or heartbeat deadline.
+
+So the rule stands on mechanism, not on a measured failure. Schedule-to-close is the deadline that does include queue wait, which is why it was removed rather than widened. Record the negative result too: a margin can be unproven without being wrong, and the campaign has not yet been run at a scale that breaches one.
 
 ## Rejected designs
 
