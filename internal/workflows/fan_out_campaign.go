@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	orchestrationv1 "orchestration/gen/orchestration/v1"
+	"orchestration/internal/workflowcatalog"
 )
 
 const (
@@ -108,7 +109,7 @@ func generateFaultCampaign(campaign *orchestrationv1.FaultCampaignSpec) ([]*orch
 		}
 		probabilities := campaign.BackgroundProbabilities
 		if probabilities == nil {
-			probabilities = defaultMixedProbabilities()
+			probabilities = workflowcatalog.DefaultMixedProbabilities()
 		}
 		if err := validateOutcomeProbabilities(probabilities); err != nil {
 			return nil, err
@@ -195,17 +196,6 @@ func outcomeWeights(probabilities *orchestrationv1.OutcomeProbabilities) []outco
 		{"panic", orchestrationv1.FaultMode_FAULT_MODE_PANIC, probabilities.Panic},
 		{"start_to_close_timeout", orchestrationv1.FaultMode_FAULT_MODE_START_TO_CLOSE_TIMEOUT, probabilities.StartToCloseTimeout},
 		{"heartbeat_timeout", orchestrationv1.FaultMode_FAULT_MODE_HEARTBEAT_TIMEOUT, probabilities.HeartbeatTimeout},
-	}
-}
-
-func defaultMixedProbabilities() *orchestrationv1.OutcomeProbabilities {
-	return &orchestrationv1.OutcomeProbabilities{
-		Success:             82,
-		RetryableFailure:    8,
-		NonRetryableFailure: 3,
-		Panic:               2,
-		StartToCloseTimeout: 3,
-		HeartbeatTimeout:    2,
 	}
 }
 
