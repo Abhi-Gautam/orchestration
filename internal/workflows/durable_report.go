@@ -31,10 +31,10 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 
 	status, err := newStatusTracker(
 		ctx,
+		durableReportActivityCount,
 		"generating-artifacts",
 		workflowcatalog.ArtifactActivityIDs(durableReportArtifactCount),
 		"Generating reusable report artifacts",
-		operationProgress(durableReportActivityCount, durableReportArtifactCount, durableReportArtifactCount, 0, 0, 0),
 	)
 	if err != nil {
 		return nil, err
@@ -50,16 +50,11 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 			MaximumAttempts:    2,
 		},
 	}
+	status.scheduleWork(durableReportArtifactCount)
 	producerExecutions := make([]durableReportArtifactExecution, durableReportArtifactCount)
 	for index := range producerExecutions {
 		activityID := workflowcatalog.ArtifactActivityID(index)
-		activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-			ActivityID:          activityID,
-			StartToCloseTimeout: producerOptions.StartToCloseTimeout,
-			HeartbeatTimeout:    producerOptions.HeartbeatTimeout,
-			WaitForCancellation: producerOptions.WaitForCancellation,
-			RetryPolicy:         producerOptions.RetryPolicy,
-		})
+		activityCtx := workflow.WithActivityOptions(ctx, withActivityID(producerOptions, activityID))
 		producerExecutions[index] = durableReportArtifactExecution{
 			index:      index,
 			activityID: activityID,
@@ -74,29 +69,22 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 	references := make([]*orchestrationv1.ArtifactReference, durableReportArtifactCount)
 	selector := workflow.NewSelector(ctx)
 	remaining := durableReportArtifactCount
-	succeeded := int64(0)
-	failed := int64(0)
 	var producerErr error
 	for _, execution := range producerExecutions {
 		execution := execution
 		selector.AddFuture(execution.future, func(future workflow.Future) {
 			var reference orchestrationv1.ArtifactReference
 			if futureErr := future.Get(ctx, &reference); futureErr != nil {
-				failed++
+				status.recordFailed()
 				if producerErr == nil {
 					producerErr = futureErr
 				}
 			} else {
 				references[execution.index] = &reference
-				succeeded++
+				status.recordSucceeded()
 			}
 			remaining--
-			status.setRunning(
-				"generating-artifacts",
-				execution.activityID,
-				"Collecting reusable report artifact references",
-				operationProgress(durableReportActivityCount, durableReportArtifactCount, int64(remaining), succeeded, failed, 0),
-			)
+			status.setRunning("generating-artifacts", execution.activityID, "Collecting reusable report artifact references")
 		})
 	}
 	for remaining > 0 {
@@ -104,20 +92,16 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 	}
 
 	if ctx.Err() != nil {
-		status.setCanceled("canceled", "Durable report generation was canceled", operationProgress(durableReportActivityCount, durableReportArtifactCount, 0, succeeded, failed, 0))
+		status.setCanceled("canceled", "Durable report generation was canceled")
 		return nil, ctx.Err()
 	}
 	if producerErr != nil {
-		status.setFailed("failed", "Report artifact generation failed", operationProgress(durableReportActivityCount, durableReportArtifactCount, 0, succeeded, failed, 0))
+		status.setFailed("failed", "Report artifact generation failed")
 		return nil, durableReportFailure("REPORT_ARTIFACT_GENERATION_FAILED", "Report artifact generation failed after retries.", "generating-artifacts", producerErr)
 	}
 
-	status.setRunning(
-		"aggregating",
-		"aggregate-artifacts",
-		"Consuming all report artifacts",
-		operationProgress(durableReportActivityCount, durableReportArtifactCount+1, 1, durableReportArtifactCount, 0, 0),
-	)
+	status.scheduleWork(1)
+	status.setRunning("aggregating", "aggregate-artifacts", "Consuming all report artifacts")
 	aggregateCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		ActivityID:          "aggregate-artifacts",
 		StartToCloseTimeout: 30 * time.Second,
@@ -136,19 +120,18 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 	}).Get(ctx, &summary)
 	if err != nil {
 		if ctx.Err() != nil {
-			status.setCanceled("canceled", "Durable report aggregation was canceled", operationProgress(durableReportActivityCount, durableReportArtifactCount+1, 0, durableReportArtifactCount, 0, 1))
+			status.recordCanceled()
+			status.setCanceled("canceled", "Durable report aggregation was canceled")
 			return nil, ctx.Err()
 		}
-		status.setFailed("failed", "Report artifact aggregation failed", operationProgress(durableReportActivityCount, durableReportArtifactCount+1, 0, durableReportArtifactCount, 1, 0))
+		status.recordFailed()
+		status.setFailed("failed", "Report artifact aggregation failed")
 		return nil, durableReportFailure("ARTIFACT_AGGREGATION_FAILED", "Report artifact aggregation failed after retries.", "aggregating", err)
 	}
 
-	status.setRunning(
-		"persisting",
-		"persist-report",
-		"Persisting the durable report",
-		operationProgress(durableReportActivityCount, durableReportActivityCount, 1, durableReportArtifactCount+1, 0, 0),
-	)
+	status.recordSucceeded()
+	status.scheduleWork(1)
+	status.setRunning("persisting", "persist-report", "Persisting the durable report")
 	persistCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		ActivityID:          "persist-report",
 		StartToCloseTimeout: 10 * time.Second,
@@ -167,10 +150,12 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 	}).Get(ctx, &record)
 	if err != nil {
 		if ctx.Err() != nil {
-			status.setCanceled("canceled", "Durable report persistence was canceled", operationProgress(durableReportActivityCount, durableReportActivityCount, 0, durableReportArtifactCount+1, 0, 1))
+			status.recordCanceled()
+			status.setCanceled("canceled", "Durable report persistence was canceled")
 			return nil, ctx.Err()
 		}
-		status.setFailed("failed", "Durable report persistence failed", operationProgress(durableReportActivityCount, durableReportActivityCount, 0, durableReportArtifactCount+1, 1, 0))
+		status.recordFailed()
+		status.setFailed("failed", "Durable report persistence failed")
 		var applicationErr *temporal.ApplicationError
 		if errors.As(err, &applicationErr) && applicationErr.Type() == activities.ReportIdempotencyConflictErrorType {
 			return nil, durableReportFailure("REPORT_IDEMPOTENCY_CONFLICT", applicationErr.Message(), "persisting", err)
@@ -183,7 +168,8 @@ func DurableReportWorkflow(ctx workflow.Context, input *orchestrationv1.DurableR
 		ArtifactCount:  record.ArtifactCount,
 		SemanticDigest: record.SemanticDigest,
 	}
-	status.setSucceeded("completed", "Durable report is ready", operationProgress(durableReportActivityCount, durableReportActivityCount, 0, durableReportActivityCount, 0, 0))
+	status.recordSucceeded()
+	status.setSucceeded("completed", "Durable report is ready")
 	return result, nil
 }
 

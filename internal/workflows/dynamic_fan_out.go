@@ -23,40 +23,46 @@ func DynamicFanOutWorkflow(ctx workflow.Context, input *orchestrationv1.DynamicF
 		return nil, invalidRequest("INVALID_DYNAMIC_FAN_OUT_REQUEST", "durations must not be negative")
 	}
 
-	planned := int64(input.RequestedCount) + 2
-	status, err := newStatusTracker(ctx, "planning", "plan-fan-out", "Planning dynamic fan-out", operationProgress(planned, 1, 1, 0, 0, 0))
+	status, err := newStatusTracker(ctx, int64(input.RequestedCount)+2, "planning", "plan-fan-out", "Planning dynamic fan-out")
 	if err != nil {
 		return nil, err
 	}
 
 	startedAt := workflow.Now(ctx)
+	status.scheduleWork(1)
 	planCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{ActivityID: "plan-fan-out", StartToCloseTimeout: 10 * time.Second})
 	var plan activities.FanOutPlanResult
 	if err := workflow.ExecuteActivity(planCtx, activities.PlanFanOutActivity, activities.FanOutPlanInput{Count: int(input.RequestedCount)}).Get(ctx, &plan); err != nil {
 		return nil, err
 	}
 
-	planned = int64(plan.Count) + 2
+	// The real branch count is only known once the planning Activity returns.
+	status.planWork(int64(plan.Count) + 2)
+	status.recordSucceeded()
+	status.scheduleWork(int64(plan.Count))
 	futures := make([]workflow.Future, plan.Count)
 	for i := 0; i < plan.Count; i++ {
 		futures[i] = scheduleWaitActivity(ctx, fmt.Sprintf("branch-%04d", i), branchDuration)
 	}
-	status.setRunning("fan-out", "branches", "Running dynamic fan-out branches", operationProgress(planned, int64(plan.Count)+1, int64(plan.Count), 1, 0, 0))
+	status.setRunning("fan-out", "branches", "Running dynamic fan-out branches")
 	branchResults := make([]activities.WaitResult, plan.Count)
 	for i, future := range futures {
 		if err := future.Get(ctx, &branchResults[i]); err != nil {
 			return nil, err
 		}
-		status.setRunning("fan-out", fmt.Sprintf("branch-%04d", i), "Collecting dynamic fan-out results", operationProgress(planned, int64(plan.Count)+1, int64(plan.Count-i-1), int64(i)+2, 0, 0))
+		status.recordSucceeded()
+		status.setRunning("fan-out", fmt.Sprintf("branch-%04d", i), "Collecting dynamic fan-out results")
 	}
-	status.setRunning("finalizing", "finalize", "Finalizing dynamic fan-out", operationProgress(planned, planned, 1, int64(plan.Count)+1, 0, 0))
+	status.scheduleWork(1)
+	status.setRunning("finalizing", "finalize", "Finalizing dynamic fan-out")
 	var finalize activities.WaitResult
 	if err := scheduleWaitActivity(ctx, "finalize", finalizeDuration).Get(ctx, &finalize); err != nil {
 		return nil, err
 	}
 
 	finishedAt := workflow.Now(ctx)
-	status.setSucceeded("completed", "Dynamic fan-out completed", operationProgress(planned, planned, 0, planned, 0, 0))
+	status.recordSucceeded()
+	status.setSucceeded("completed", "Dynamic fan-out completed")
 	firstStartedAt, lastFinishedAt, peakConcurrency := summarizeBranchTiming(branchResults)
 	return &orchestrationv1.DynamicFanOutResult{
 		PlannedCount:           int32(plan.Count),

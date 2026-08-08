@@ -38,6 +38,7 @@ type scheduledActivity struct {
 
 type fanOutCollector struct {
 	result         *orchestrationv1.FanOutPolicyResult
+	status         *statusTracker
 	successDigests [][]byte
 	sampleKeys     map[string]struct{}
 }
@@ -48,14 +49,7 @@ func FanOutPolicyWorkflow(ctx workflow.Context, input *orchestrationv1.FanOutPol
 		return nil, invalidRequest("INVALID_FAN_OUT_POLICY_REQUEST", err.Error())
 	}
 
-	planned := int64(len(branches))
-	status, err := newStatusTracker(
-		ctx,
-		"fan-out",
-		"scheduling",
-		"Scheduling fan-out policy Activities",
-		operationProgress(planned, planned, planned, 0, 0, 0),
-	)
+	status, err := newStatusTracker(ctx, int64(len(branches)), "fan-out", "scheduling", "Scheduling fan-out policy Activities")
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +58,7 @@ func FanOutPolicyWorkflow(ctx workflow.Context, input *orchestrationv1.FanOutPol
 	activityCtx, cancelActivities := workflow.WithCancel(ctx)
 	defer cancelActivities()
 
+	status.scheduleWork(int64(len(branches)))
 	scheduled := scheduleFaultActivities(activityCtx, branches)
 	result, firstTerminalErr := aggregateFaultActivities(ctx, scheduled, input.Policy, cancelActivities, status)
 	result.Policy = input.Policy
@@ -72,17 +67,16 @@ func FanOutPolicyWorkflow(ctx workflow.Context, input *orchestrationv1.FanOutPol
 	result.StartedAt = timestamppb.New(startedAt)
 	finishFanOutResult(ctx, result, startedAt)
 
-	progress := operationProgress(planned, planned, 0, int64(result.Succeeded), int64(result.Failed), int64(result.Canceled))
 	if ctx.Err() != nil {
-		status.setCanceled("canceled", "Fan-out policy was canceled", progress)
+		status.setCanceled("canceled", "Fan-out policy was canceled")
 		return result, ctx.Err()
 	}
 	if firstTerminalErr != nil {
-		status.setFailed("failed", "Fan-out policy stopped after a terminal Activity failure", progress)
+		status.setFailed("failed", "Fan-out policy stopped after a terminal Activity failure")
 		return result, failFastWorkflowError(result)
 	}
 	if input.Policy == orchestrationv1.AggregationPolicy_AGGREGATION_POLICY_ALL_SETTLED_THEN_FAIL && (result.Failed > 0 || result.Canceled > 0) {
-		status.setFailed("failed", "Fan-out policy aggregated available outputs and failed", progress)
+		status.setFailed("failed", "Fan-out policy aggregated available outputs and failed")
 		return result, aggregateWorkflowError(result)
 	}
 
@@ -90,11 +84,7 @@ func FanOutPolicyWorkflow(ctx workflow.Context, input *orchestrationv1.FanOutPol
 	if result.Failed > 0 || result.Canceled > 0 {
 		message = "Fan-out policy completed with a partial aggregate"
 	}
-	status.setSucceeded(
-		"completed",
-		message,
-		progress,
-	)
+	status.setSucceeded("completed", message)
 	return result, nil
 }
 
@@ -154,6 +144,7 @@ func aggregateFaultActivities(
 			Planned:          int32(len(scheduled)),
 			FailureBreakdown: &orchestrationv1.FanOutFailureBreakdown{},
 		},
+		status:         status,
 		successDigests: make([][]byte, len(scheduled)),
 		sampleKeys:     make(map[string]struct{}, maxFanOutSamples),
 	}
@@ -180,19 +171,7 @@ func aggregateFaultActivities(
 			}
 
 			remaining--
-			status.setRunning(
-				"fan-out",
-				item.activityID,
-				"Collecting fan-out policy outcomes",
-				operationProgress(
-					int64(len(scheduled)),
-					int64(len(scheduled)),
-					int64(remaining),
-					int64(collector.result.Succeeded),
-					int64(collector.result.Failed),
-					int64(collector.result.Canceled),
-				),
-			)
+			status.setRunning("fan-out", item.activityID, "Collecting fan-out policy outcomes")
 		})
 	}
 
@@ -207,6 +186,7 @@ func aggregateFaultActivities(
 
 func (collector *fanOutCollector) recordSuccess(index int, outcome *orchestrationv1.ActivityOutcome, result activities.FaultActivityResult) {
 	collector.result.Succeeded++
+	collector.status.recordSucceeded()
 	if result.Attempt > 1 {
 		collector.result.SucceededAfterRetry++
 		collector.addSample("succeeded-after-retry", outcome)
@@ -223,6 +203,7 @@ func (collector *fanOutCollector) recordFailure(outcome *orchestrationv1.Activit
 	case failure.Kind == orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_CANCELED:
 		collector.result.Canceled++
 		collector.result.FailureBreakdown.Canceled++
+		collector.status.recordCanceled()
 		key = "canceled"
 	case failure.Kind == orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_PANIC:
 		collector.result.Failed++
@@ -247,6 +228,9 @@ func (collector *fanOutCollector) recordFailure(outcome *orchestrationv1.Activit
 	default:
 		collector.result.Failed++
 		collector.result.FailureBreakdown.Unknown++
+	}
+	if failure.Kind != orchestrationv1.ActivityFailureKind_ACTIVITY_FAILURE_KIND_CANCELED {
+		collector.status.recordFailed()
 	}
 	collector.addSample(key, outcome)
 }

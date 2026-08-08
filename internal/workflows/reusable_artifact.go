@@ -27,14 +27,15 @@ func ReusableArtifactWorkflow(ctx workflow.Context, input *orchestrationv1.Reusa
 
 	status, err := newStatusTracker(
 		ctx,
+		reusableArtifactCount,
 		"generating",
 		workflowcatalog.ArtifactActivityIDs(reusableArtifactCount),
 		"Generating reusable artifacts",
-		operationProgress(reusableArtifactCount, reusableArtifactCount, reusableArtifactCount, 0, 0, 0),
 	)
 	if err != nil {
 		return nil, err
 	}
+	status.scheduleWork(reusableArtifactCount)
 
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: heavyWorkDuration + workflowcatalog.ArtifactActivityTimeoutMargin,
@@ -77,45 +78,37 @@ func ReusableArtifactWorkflow(ctx workflow.Context, input *orchestrationv1.Reusa
 	}
 	selector := workflow.NewSelector(ctx)
 	remaining := reusableArtifactCount
-	succeeded := int64(0)
-	failed := int64(0)
 	var firstErr error
 	for _, execution := range executions {
 		execution := execution
 		selector.AddFuture(execution.future, func(future workflow.Future) {
 			var reference orchestrationv1.ArtifactReference
 			if futureErr := future.Get(ctx, &reference); futureErr != nil {
-				failed++
+				status.recordFailed()
 				if firstErr == nil {
 					firstErr = futureErr
 				}
 			} else {
 				result.Artifacts[execution.index] = &reference
-				succeeded++
+				status.recordSucceeded()
 			}
 			remaining--
-			status.setRunning(
-				"generating",
-				execution.activityID,
-				"Collecting reusable artifact references",
-				operationProgress(reusableArtifactCount, reusableArtifactCount, int64(remaining), succeeded, failed, 0),
-			)
+			status.setRunning("generating", execution.activityID, "Collecting reusable artifact references")
 		})
 	}
 
 	for remaining > 0 {
 		selector.Select(ctx)
 	}
-	progress := operationProgress(reusableArtifactCount, reusableArtifactCount, 0, succeeded, failed, 0)
 	if ctx.Err() != nil {
-		status.setCanceled("canceled", "Reusable artifact generation was canceled", progress)
+		status.setCanceled("canceled", "Reusable artifact generation was canceled")
 		return result, ctx.Err()
 	}
 	if firstErr != nil {
-		status.setFailed("failed", "Reusable artifact generation failed", progress)
+		status.setFailed("failed", "Reusable artifact generation failed")
 		return result, firstErr
 	}
 
-	status.setSucceeded("completed", "Reusable artifacts are ready", progress)
+	status.setSucceeded("completed", "Reusable artifacts are ready")
 	return result, nil
 }
