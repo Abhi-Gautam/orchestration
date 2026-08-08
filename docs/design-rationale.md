@@ -40,7 +40,7 @@ Each Workflow here isolates one execution concern and runs against a real stack.
 | Results routed by best-effort signals | Branch results awaited as futures (`simple_diamond.go`, `dynamic_fan_out.go`) | Demonstrated |
 | Retry behavior differing by dispatcher; unset attempt limits meaning unlimited | One explicit retry policy per branch. The 1,000-branch campaign reports retry exhaustion and recovery-after-retry as distinct outcomes (`fan_out_policy.go`, `fan_out_campaign.go`) | Demonstrated |
 | The same injected fault classified differently across runs | Branch behavior resolved in the Workflow before scheduling, and no Activity answers its own expired deadline with a cancellation (`fan_out_campaign.go`, `fault_injection.go`) | Demonstrated |
-| Deadlines coupling an outcome to Worker load | Deadlines set from the work each branch does, and no schedule-to-close deadline (`fan_out_policy.go`) | Reasoned |
+| Deadlines coupling an outcome to Worker load | Deadlines set from the work each branch does, and no schedule-to-close deadline (`fan_out_policy.go`) | Demonstrated |
 | Callers unable to tell work they started from work they joined | Business-keyed starts carry the server's `USE_EXISTING` conflict policy and report whether this call created the execution (`cmd/web/runner.go`) | Demonstrated |
 | Terminal failure semantics undefined for fan-out | Three named policies with stated aggregation and cancellation behavior | Demonstrated |
 | Deduplication layers competing | Business-key identity: artifact keys exclude Run ID, attempt, and Build ID; a durable report reuses a matching row and rejects a conflicting one (`reusable_artifact.go`, `durable_report.go`) | Demonstrated |
@@ -50,11 +50,13 @@ Each Workflow here isolates one execution concern and runs against a real stack.
 | Large payloads travelling through execution history | References to object storage and durable records; bounded aggregates and sampled failures | Demonstrated |
 | Documentation describing intent as behavior | Every document carries a status line and states what is not implemented | Structural |
 
-### The deadline rule is reasoned, and one negative result
+### What the deadlines measured, including one negative result
 
-The fan-out previously gave every branch a heartbeat deadline close to its heartbeat interval. That margin was thin by inspection, but it was not observed to misfire: on the old configuration, 1,000, 4,000 and 8,000 concurrent Activities all settled without a single unplanned timeout, with elapsed time growing from 7 to 45 seconds. Saturation produced queueing, and queueing does not count against a start-to-close or heartbeat deadline.
+Queue wait is the load-dependent part of an Activity's life, and only schedule-to-close counts it. At 24,000 concurrent Activities the slowest 1,000-branch campaign waited a median of 64 seconds and a maximum of 135 seconds before starting, on branches doing 300 milliseconds of work. Its schedule-to-close times matched its queue waits almost exactly, and **25 of its 1,000 branches passed 120 seconds** — so the previous two-minute schedule-to-close deadline would have failed them for being queued behind their siblings. That is why it was removed rather than widened.
 
-So the rule stands on mechanism, not on a measured failure. Schedule-to-close is the deadline that does include queue wait, which is why it was removed rather than widened. Record the negative result too: a margin can be unproven without being wrong, and the campaign has not yet been run at a scale that breaches one.
+The heartbeat deadline is the negative result. The fan-out previously ran with a heartbeat deadline close to its heartbeat interval, which was thin by inspection but was never observed to misfire: at 1,000, 4,000 and 8,000 concurrent Activities every branch settled without an unplanned timeout. Start-to-close and heartbeat deadlines measure execution, and saturation produced queueing, which they do not see. The deadline was widened anyway, but on mechanism rather than on a measured failure.
+
+A margin can be unproven without being wrong. Recording which of the two was which keeps the distinction usable by anyone reading this later.
 
 ## Rejected designs
 
