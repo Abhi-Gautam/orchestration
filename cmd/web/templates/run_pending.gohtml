@@ -2,6 +2,7 @@
   id="run-{{.RunID}}"
   class="card result-card result-pending"
   tabindex="-1"
+  data-workflow="{{.Workflow}}"
   data-workflow-id="{{.WorkflowID}}"
   data-run-id="{{.RunID}}"
   data-terminal="false"
@@ -23,6 +24,10 @@
       <span data-run-percent>0%</span>
     </div>
     <progress max="100" value="0" data-run-progress-bar>0%</progress>
+  </div>
+
+  <div class="run-actions" data-run-actions hidden>
+    <button type="button" class="button button-secondary button-compact" data-run-cancel>Cancel run</button>
   </div>
 
   <dl class="metadata-grid">

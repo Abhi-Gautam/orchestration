@@ -628,11 +628,51 @@ function workflowLab() {
       const bar = card.querySelector("[data-run-progress-bar]");
       bar.value = percent;
       bar.textContent = `${Math.round(percent)}%`;
+
+      // Controls come from the running Workflow, never from the catalog: a job that is
+      // already shutting down withdraws the action rather than offering it again.
+      const actions = card.querySelector("[data-run-actions]");
+      if (actions) {
+        const offered = Array.isArray(status.availableActions) ? status.availableActions : [];
+        actions.hidden = card.dataset.terminal === "true" || !offered.includes("OPERATION_ACTION_CANCEL");
+      }
+    },
+
+    bindRunActions(card) {
+      if (!card || card.dataset.actionsBound === "true") return;
+      card.dataset.actionsBound = "true";
+      const button = card.querySelector("[data-run-cancel]");
+      if (button) button.addEventListener("click", () => this.cancelRun(card));
+    },
+
+    async cancelRun(card) {
+      const button = card.querySelector("[data-run-cancel]");
+      if (button) button.disabled = true;
+      try {
+        const response = await fetch("/api/runs/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workflow: card.dataset.workflow,
+            workflowId: card.dataset.workflowId,
+            runId: card.dataset.runId,
+          }),
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          card.querySelector("[data-run-message]").textContent = body.error || "The run could not be cancelled.";
+          if (button) button.disabled = false;
+        }
+      } catch {
+        if (button) button.disabled = false;
+      }
     },
 
     applyTerminalResponse(card, response) {
       const succeeded = response.status === "completed";
       card.dataset.terminal = "true";
+      const actionsHost = card.querySelector("[data-run-actions]");
+      if (actionsHost) actionsHost.hidden = true;
       card.classList.remove("result-pending", "result-warning", "result-success", "result-failure");
       card.classList.add(succeeded ? "result-success" : "result-failure");
 
@@ -683,12 +723,16 @@ function workflowLab() {
     ensureRunCard(run) {
       if (!run?.runId) return null;
       let card = document.getElementById(`run-${run.runId}`);
-      if (card) return card;
+      if (card) {
+        this.bindRunActions(card);
+        return card;
+      }
 
       const template = document.getElementById("live-run-card-template");
       const fragment = template.content.cloneNode(true);
       card = fragment.querySelector("article");
       card.id = `run-${run.runId}`;
+      card.dataset.workflow = run.workflow;
       card.dataset.workflowId = run.workflowId;
       card.dataset.runId = run.runId;
       card.querySelector("[data-run-name]").textContent = run.workflowName || run.workflow;
@@ -699,7 +743,9 @@ function workflowLab() {
       const link = card.querySelector("[data-run-temporal-link]");
       link.href = run.temporalUiUrl || "#";
       document.getElementById("runs-list").prepend(fragment);
-      return document.getElementById(`run-${run.runId}`);
+      const attached = document.getElementById(`run-${run.runId}`);
+      this.bindRunActions(attached);
+      return attached;
     },
 
     updateElapsedTimes() {

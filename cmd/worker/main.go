@@ -60,11 +60,26 @@ func main() {
 	if len(workflowExecutions) != 0 {
 		log.Fatalf("%d executable Workflow implementations are missing from the catalog", len(workflowExecutions))
 	}
+	for name, execution := range workflows.ChildExecutions() {
+		w.RegisterWorkflowWithOptions(execution, workflow.RegisterOptions{Name: name})
+	}
 	w.RegisterActivity(activities.FormatGreeting)
 	w.RegisterActivity(activities.WaitActivity)
 	w.RegisterActivity(activities.PlanFanOutActivity)
 	w.RegisterActivity(activities.FaultInjectionActivity)
 	w.RegisterActivity(activities.CheckInventory)
+	w.RegisterActivityWithOptions(
+		activities.TrainIntervalActivity,
+		temporalactivity.RegisterOptions{Name: activities.TrainIntervalActivityName},
+	)
+	w.RegisterActivityWithOptions(
+		artifactActivities.PublishCheckpointActivity,
+		temporalactivity.RegisterOptions{Name: activities.PublishCheckpointActivityName},
+	)
+	w.RegisterActivityWithOptions(
+		artifactActivities.LoadCheckpointActivity,
+		temporalactivity.RegisterOptions{Name: activities.LoadCheckpointActivityName},
+	)
 	w.RegisterActivity(activities.FulfillOrder)
 	w.RegisterActivity(activities.BackorderOrder)
 	w.RegisterActivityWithOptions(

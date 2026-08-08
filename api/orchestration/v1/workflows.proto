@@ -294,6 +294,72 @@ message WorkflowFailure {
   map<string, string> metadata = 5;
 }
 
+// Training job: a parent Workflow owning shard Workflows that checkpoint independently.
+// Cancellation is cooperative and bounded; termination is not, which is the comparison.
+
+enum ShardState {
+  SHARD_STATE_UNSPECIFIED = 0;
+  // Reached the requested step count.
+  SHARD_STATE_COMPLETED = 1;
+  // Cancelled, and its in-flight interval finished inside the grace period.
+  SHARD_STATE_DRAINED = 2;
+  // Cancelled, and the grace period expired before its interval finished.
+  SHARD_STATE_ABANDONED = 3;
+  SHARD_STATE_FAILED = 4;
+}
+
+enum CheckpointFailureCase {
+  CHECKPOINT_FAILURE_CASE_UNSPECIFIED = 0;
+  CHECKPOINT_FAILURE_CASE_NONE = 1;
+  // Publish a checkpoint whose payload does not match its checksum, standing in for a
+  // write interrupted partway. Resume must reject it rather than resume from a lie.
+  CHECKPOINT_FAILURE_CASE_TORN_WRITE = 2;
+}
+
+message TrainingJobRequest {
+  string experiment_id = 1;
+  int32 shard_count = 2;
+  int32 total_steps = 3;
+  int32 steps_per_checkpoint = 4;
+  google.protobuf.Duration step_duration = 5;
+  // How long a cancelled shard may keep working to finish its current interval. Zero
+  // abandons the interval immediately; a longer grace preserves more work.
+  google.protobuf.Duration shutdown_grace = 6;
+  CheckpointFailureCase failure_case = 7;
+}
+
+message TrainingShardRequest {
+  string experiment_id = 1;
+  string shard_id = 2;
+  int32 total_steps = 3;
+  int32 steps_per_checkpoint = 4;
+  google.protobuf.Duration step_duration = 5;
+  google.protobuf.Duration shutdown_grace = 6;
+  CheckpointFailureCase failure_case = 7;
+}
+
+message ShardOutcome {
+  string shard_id = 1;
+  ShardState state = 2;
+  int32 resumed_from_step = 3;
+  int32 completed_step = 4;
+  int32 checkpoint_step = 5;
+  string checkpoint_key = 6;
+  int32 rejected_checkpoints = 7;
+}
+
+message TrainingJobResult {
+  int32 shard_count = 1;
+  int32 total_steps = 2;
+  // The highest step every shard has a valid checkpoint for. Resuming anywhere above it
+  // would advance a shard past work another shard never durably recorded.
+  int32 resume_step = 3;
+  bool complete = 4;
+  int32 resumed_from_step = 5;
+  google.protobuf.Duration shutdown_latency = 6;
+  repeated ShardOutcome shards = 7;
+}
+
 // Conditional branch: CheckInventory at runtime, then FulfillOrder XOR BackorderOrder.
 enum OrderPath {
   ORDER_PATH_UNSPECIFIED = 0;

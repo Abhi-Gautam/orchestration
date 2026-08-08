@@ -1,6 +1,7 @@
 package workflows
 
 import (
+	"strconv"
 	"time"
 
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -15,6 +16,10 @@ func duration(value *durationpb.Duration) time.Duration {
 		return 0
 	}
 	return value.AsDuration()
+}
+
+func itoa(value int32) string {
+	return strconv.Itoa(int(value))
 }
 
 func waitResult(result activities.WaitResult) *orchestrationv1.WaitResult {

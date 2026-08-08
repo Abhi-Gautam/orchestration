@@ -7,6 +7,10 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"go.temporal.io/api/serviceerror"
+
+	"orchestration/internal/workflowcatalog"
 )
 
 func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
@@ -99,6 +103,39 @@ func (s *server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, descriptor)
+}
+
+// handleCancelRun asks Temporal to cancel a run. Temporal is the authority on whether the
+// request is still valid: the action a Workflow advertises is a hint the caller may act on,
+// and a run that closed in the meantime rejects it here rather than in the browser.
+func (s *server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
+	var req cancelRunRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16))
+	decoder.DisallowUnknownFields()
+	if err := decodeOne(decoder, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON request body.")
+		return
+	}
+	if _, known := workflowcatalog.FindDefinition(strings.TrimSpace(req.Workflow)); !known {
+		writeError(w, http.StatusBadRequest, "Unknown workflow id.")
+		return
+	}
+	if !validTemporalID(req.WorkflowID) || !validTemporalID(req.RunID) {
+		writeError(w, http.StatusBadRequest, "Invalid workflow or run id.")
+		return
+	}
+
+	if err := s.temporal.CancelWorkflow(r.Context(), req.WorkflowID, req.RunID); err != nil {
+		var notFound *serviceerror.NotFound
+		if errors.As(err, &notFound) {
+			writeError(w, http.StatusConflict, "This run is no longer running.")
+			return
+		}
+		log.Printf("cancel workflow %s run %s: %v", req.WorkflowID, req.RunID, err)
+		writeError(w, http.StatusBadGateway, "The run could not be cancelled.")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "canceling"})
 }
 
 func (s *server) writeTemplate(w http.ResponseWriter, status int, name string, tmpl interface {

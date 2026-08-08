@@ -527,6 +527,10 @@ textarea:disabled {
   opacity: 0.58;
 }
 
+.run-actions {
+  margin: 14px 0 0;
+}
+
 .running-indicator {
   display: inline-flex;
   align-items: center;

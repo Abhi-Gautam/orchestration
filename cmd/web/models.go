@@ -34,6 +34,12 @@ type runDescriptor struct {
 	TemporalUIURL string    `json:"temporalUiUrl"`
 }
 
+type cancelRunRequest struct {
+	Workflow   string `json:"workflow"`
+	WorkflowID string `json:"workflowId"`
+	RunID      string `json:"runId"`
+}
+
 type runEvent struct {
 	Workflow        string          `json:"workflow"`
 	WorkflowName    string          `json:"workflowName"`

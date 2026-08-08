@@ -51,6 +51,13 @@ func (tracker *statusTracker) recordFailed() { tracker.failed++ }
 func (tracker *statusTracker) recordCanceled() { tracker.canceled++ }
 
 func (tracker *statusTracker) setRunning(phase, currentStep, message string) {
+	tracker.publish(orchestrationv1.OperationState_OPERATION_STATE_RUNNING, phase, currentStep, message,
+		orchestrationv1.OperationAction_OPERATION_ACTION_CANCEL)
+}
+
+// setShuttingDown publishes a running state that offers no actions. The operation is
+// already stopping, so cancelling it again is not a choice the caller still has.
+func (tracker *statusTracker) setShuttingDown(phase, currentStep, message string) {
 	tracker.publish(orchestrationv1.OperationState_OPERATION_STATE_RUNNING, phase, currentStep, message)
 }
 
@@ -66,17 +73,14 @@ func (tracker *statusTracker) setCanceled(phase, message string) {
 	tracker.publish(orchestrationv1.OperationState_OPERATION_STATE_CANCELED, phase, "", message)
 }
 
-func (tracker *statusTracker) publish(state orchestrationv1.OperationState, phase, currentStep, message string) {
+func (tracker *statusTracker) publish(state orchestrationv1.OperationState, phase, currentStep, message string, actions ...orchestrationv1.OperationAction) {
 	tracker.status.State = state
 	tracker.status.Phase = phase
 	tracker.status.CurrentStep = currentStep
 	tracker.status.Message = message
 	tracker.status.Progress = tracker.progress()
 	tracker.status.Revision++
-	tracker.status.AvailableActions = nil
-	if state == orchestrationv1.OperationState_OPERATION_STATE_RUNNING {
-		tracker.status.AvailableActions = []orchestrationv1.OperationAction{orchestrationv1.OperationAction_OPERATION_ACTION_CANCEL}
-	}
+	tracker.status.AvailableActions = actions
 }
 
 func (tracker *statusTracker) progress() *orchestrationv1.OperationProgress {

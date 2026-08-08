@@ -20,10 +20,14 @@ const (
 	ReusableArtifactWorkflowName  = "ReusableArtifactWorkflow"
 	DurableReportWorkflowName     = "DurableReportWorkflow"
 	FanOutPolicyWorkflowName      = "FanOutPolicyWorkflow"
+	TrainingJobWorkflowName       = "TrainingJobWorkflow"
+	TrainingShardWorkflowName     = "TrainingShardWorkflow"
 	ConditionalBranchWorkflowName = "ConditionalBranchWorkflow"
 	OperationStatusQueryName      = "operation-status"
 
 	ReusableArtifactCount         = 5
+	MaxTrainingShards             = 8
+	MaxTrainingSteps              = 10000
 	ArtifactActivityTimeoutMargin = 30 * time.Second
 )
 
@@ -119,6 +123,22 @@ func buildDefinitions() []Definition {
 			Example:      fanOutPolicyExample(),
 		},
 		{
+			ID: "training-job", Name: "Training Job", Description: "Checkpointing shards under a parent that owns them; cancel drains within a grace period, terminate does not.",
+			TemporalName: TrainingJobWorkflowName,
+			NewRequest:   func() proto.Message { return &orchestrationv1.TrainingJobRequest{} },
+			NewResult:    func() proto.Message { return &orchestrationv1.TrainingJobResult{} },
+			Example: &orchestrationv1.TrainingJobRequest{
+				ExperimentId:       "training-001",
+				ShardCount:         3,
+				TotalSteps:         60,
+				StepsPerCheckpoint: 5,
+				StepDuration:       durationpb.New(time.Second),
+				ShutdownGrace:      durationpb.New(10 * time.Second),
+				FailureCase:        orchestrationv1.CheckpointFailureCase_CHECKPOINT_FAILURE_CASE_NONE,
+			},
+			WorkflowID: trainingJobDefinitionWorkflowID,
+		},
+		{
 			ID: "conditional-branch", Name: "Conditional Branch", Description: "Check inventory at runtime, then fulfill or backorder — exactly one path Activity.",
 			TemporalName: ConditionalBranchWorkflowName,
 			NewRequest:   func() proto.Message { return &orchestrationv1.ConditionalBranchRequest{} },
@@ -188,6 +208,64 @@ func ValidateDurableReportRequest(input *orchestrationv1.DurableReportRequest) (
 		return 0, errors.New("failure case must be none, aggregation retryable, persist before commit, or persist after commit")
 	}
 	return heavyWorkDuration, nil
+}
+
+// TrainingJobWorkflowID makes the experiment the job's identity, so repeating a request
+// joins the run in flight and a request after cancellation resumes from its checkpoints.
+func TrainingJobWorkflowID(input *orchestrationv1.TrainingJobRequest) (string, error) {
+	if err := ValidateTrainingJobRequest(input); err != nil {
+		return "", err
+	}
+	return "training-job/" + input.ExperimentId, nil
+}
+
+// TrainingShardWorkflowID keeps a shard's identity stable across resumes so its Workflow ID
+// names the same logical shard every time the job runs.
+func TrainingShardWorkflowID(experimentID string, shard int) string {
+	return fmt.Sprintf("training-job/%s/shard-%02d", experimentID, shard)
+}
+
+func ShardID(shard int) string {
+	return fmt.Sprintf("shard-%02d", shard)
+}
+
+func ValidateTrainingJobRequest(input *orchestrationv1.TrainingJobRequest) error {
+	if input == nil {
+		return errors.New("input is required")
+	}
+	if !validIdentifier(input.ExperimentId) {
+		return errors.New("experiment ID must be 1-128 characters using letters, numbers, dot, underscore, or hyphen")
+	}
+	if input.ShardCount < 1 || input.ShardCount > MaxTrainingShards {
+		return fmt.Errorf("shard_count must be between 1 and %d", MaxTrainingShards)
+	}
+	if input.TotalSteps < 1 || input.TotalSteps > MaxTrainingSteps {
+		return fmt.Errorf("total_steps must be between 1 and %d", MaxTrainingSteps)
+	}
+	if input.StepsPerCheckpoint < 1 || input.StepsPerCheckpoint > input.TotalSteps {
+		return errors.New("steps_per_checkpoint must be between 1 and total_steps")
+	}
+	if input.StepDuration == nil || input.StepDuration.AsDuration() <= 0 {
+		return errors.New("step_duration must be positive")
+	}
+	if input.ShutdownGrace != nil && input.ShutdownGrace.AsDuration() < 0 {
+		return errors.New("shutdown_grace must not be negative")
+	}
+	switch input.FailureCase {
+	case orchestrationv1.CheckpointFailureCase_CHECKPOINT_FAILURE_CASE_NONE,
+		orchestrationv1.CheckpointFailureCase_CHECKPOINT_FAILURE_CASE_TORN_WRITE:
+	default:
+		return errors.New("failure case must be none or torn write")
+	}
+	return nil
+}
+
+func trainingJobDefinitionWorkflowID(message proto.Message) (string, error) {
+	input, ok := message.(*orchestrationv1.TrainingJobRequest)
+	if !ok {
+		return "", errors.New("unexpected request type")
+	}
+	return TrainingJobWorkflowID(input)
 }
 
 func ArtifactActivityID(index int) string {

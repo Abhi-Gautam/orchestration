@@ -57,6 +57,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/workflows", s.handleListWorkflows)
 	mux.HandleFunc("POST /api/workflows/run", s.handleRunWorkflow)
 	mux.HandleFunc("GET /api/runs/events", s.handleRunEvents)
+	mux.HandleFunc("POST /api/runs/cancel", s.handleCancelRun)
 
 	mux.Handle("GET /static/", http.StripPrefix("/static/", s.static))
 	return mux
