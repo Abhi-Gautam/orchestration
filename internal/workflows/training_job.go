@@ -120,9 +120,11 @@ func collectTrainingShards(
 			case err == nil:
 				status.recordSucceeded()
 			case temporal.IsCanceledError(err):
-				readShardCancellation(ctx, err, outcome)
+				readShardOutcome(ctx, err, outcome)
 				status.recordCanceled()
 			default:
+				workflow.GetLogger(ctx).Error("training shard failed", "shardId", shard.activityID, "error", err)
+				readShardOutcome(ctx, err, outcome)
 				outcome.State = orchestrationv1.ShardState_SHARD_STATE_FAILED
 				status.recordFailed()
 			}
@@ -141,16 +143,25 @@ func collectTrainingShards(
 	}
 }
 
-// readShardCancellation recovers the outcome a cancelled shard attached to its error.
-func readShardCancellation(ctx workflow.Context, err error, outcome *orchestrationv1.ShardOutcome) {
+// readShardOutcome recovers the outcome a shard attached to its terminal error, whether it
+// was cancelled or failed. When it cannot be read the shard keeps checkpoint step zero,
+// which understates the resume point rather than claiming progress no shard can prove.
+func readShardOutcome(ctx workflow.Context, err error, outcome *orchestrationv1.ShardOutcome) {
 	var canceled *temporal.CanceledError
-	if !errors.As(err, &canceled) || !canceled.HasDetails() {
+	if errors.As(err, &canceled) {
+		if canceled.HasDetails() && canceled.Details(outcome) == nil {
+			return
+		}
+		workflow.GetLogger(ctx).Warn("shard cancellation outcome could not be read", "error", err)
 		outcome.State = orchestrationv1.ShardState_SHARD_STATE_ABANDONED
 		return
 	}
-	if decodeErr := canceled.Details(outcome); decodeErr != nil {
-		workflow.GetLogger(ctx).Warn("shard cancellation outcome could not be decoded", "error", decodeErr)
-		outcome.State = orchestrationv1.ShardState_SHARD_STATE_ABANDONED
+
+	var failed *temporal.ApplicationError
+	if errors.As(err, &failed) && failed.Type() == shardFailureErrorType && failed.HasDetails() {
+		if decodeErr := failed.Details(outcome); decodeErr != nil {
+			workflow.GetLogger(ctx).Warn("shard failure outcome could not be decoded", "error", decodeErr)
+		}
 	}
 }
 

@@ -15,6 +15,8 @@ const (
 	checkpointIOTimeout  = 20 * time.Second
 	trainIntervalMargin  = 30 * time.Second
 	checkpointMaxAttempt = 3
+
+	shardFailureErrorType = "TrainingShardFailed"
 )
 
 // TrainingShardWorkflow trains one shard, checkpointing every interval.
@@ -31,8 +33,7 @@ func TrainingShardWorkflow(ctx workflow.Context, input *orchestrationv1.Training
 
 	loaded, err := loadShardCheckpoint(durableCtx, input)
 	if err != nil {
-		outcome.State = orchestrationv1.ShardState_SHARD_STATE_FAILED
-		return outcome, err
+		return outcome, shardFailed(outcome, err)
 	}
 	outcome.ResumedFromStep = loaded.Step
 	outcome.CompletedStep = loaded.Step
@@ -63,8 +64,7 @@ func TrainingShardWorkflow(ctx workflow.Context, input *orchestrationv1.Training
 
 		result, finished, err := awaitInterval(ctx, interval, duration(input.ShutdownGrace))
 		if err != nil {
-			outcome.State = orchestrationv1.ShardState_SHARD_STATE_FAILED
-			return outcome, err
+			return outcome, shardFailed(outcome, err)
 		}
 		if !finished {
 			// The grace period expired. Dropping the interval costs only the steps since
@@ -77,8 +77,7 @@ func TrainingShardWorkflow(ctx workflow.Context, input *orchestrationv1.Training
 		outcome.CompletedStep = result.CompletedStep
 		key, err := publishShardCheckpoint(durableCtx, input, outcome.CompletedStep)
 		if err != nil {
-			outcome.State = orchestrationv1.ShardState_SHARD_STATE_FAILED
-			return outcome, err
+			return outcome, shardFailed(outcome, err)
 		}
 		outcome.CheckpointStep = outcome.CompletedStep
 		outcome.CheckpointKey = key
@@ -100,6 +99,18 @@ func TrainingShardWorkflow(ctx workflow.Context, input *orchestrationv1.Training
 // its parent nothing about where it stopped, and the resume point is built from exactly that.
 func shardCanceled(outcome *orchestrationv1.ShardOutcome) error {
 	return temporal.NewCanceledError(outcome)
+}
+
+// shardFailed carries the outcome out on a failure for the same reason. A shard that fails
+// has usually still checkpointed real progress, and dropping that would report its
+// checkpoint as step zero and drag the job's resume point down to the same place.
+func shardFailed(outcome *orchestrationv1.ShardOutcome, cause error) error {
+	outcome.State = orchestrationv1.ShardState_SHARD_STATE_FAILED
+	return temporal.NewApplicationErrorWithOptions(
+		"training shard failed",
+		shardFailureErrorType,
+		temporal.ApplicationErrorOptions{Cause: cause, Details: []any{outcome}},
+	)
 }
 
 // awaitInterval waits for the current interval, and once cancellation arrives gives it the
