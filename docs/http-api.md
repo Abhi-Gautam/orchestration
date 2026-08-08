@@ -14,6 +14,7 @@ The web process exposes a generic catalog, asynchronous Workflow starts, and mul
 | `GET /api/workflows` | JSON catalog |
 | `POST /api/workflows/run` | JSON start |
 | `GET /api/runs/events` | Monitor up to 32 runs over SSE |
+| `POST /api/runs/cancel` | Request cancellation of a run |
 | `GET /static/*` | Embedded static assets |
 
 ## Start a Workflow
@@ -55,6 +56,21 @@ An execution that has already closed does not block a new one; a repeated busine
 The body limit is 1 MiB. Unknown top-level fields and multiple JSON values are rejected.
 
 `input` uses protobuf JSON: field names are lower camel case, enums use symbolic names, durations and timestamps use protobuf formats, and 64-bit integers are JSON strings. Unknown protobuf fields are rejected.
+
+## Cancel a run
+
+```http
+POST /api/runs/cancel
+Content-Type: application/json
+
+{ "workflow": "training-job", "workflowId": "...", "runId": "..." }
+```
+
+Returns `202 Accepted` once Temporal has the request; cancellation itself is cooperative, and the run reports its progress through the same status stream.
+
+A Workflow advertises `OPERATION_ACTION_CANCEL` in its status while cancelling is a choice the caller still has, and withdraws it once the run is already shutting down. Those actions are hints: Temporal decides whether the request is still valid, so a run that closed first answers `409`.
+
+Termination is deliberately absent. It skips every shutdown path a Workflow defines, so it stays an operator action on the Temporal UI that each run card links to.
 
 ## Monitor runs
 

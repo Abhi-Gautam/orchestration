@@ -90,7 +90,7 @@ Large fan-outs should return bounded category counts and representative samples,
 | Replay | Reconstruct state from History and check deterministic compatibility |
 | Reset | Create a new Run from an earlier Workflow Task boundary |
 
-The current HTTP API exposes start and monitoring only. Signal, Update, cancellation, termination, retry, and reset product endpoints are not implemented.
+The current HTTP API exposes start, monitoring, and cancellation. Signal, Update, termination, retry, and reset product endpoints are not implemented; termination stays an operator action on the Temporal UI.
 
 ## Code map
 
@@ -98,3 +98,4 @@ The current HTTP API exposes start and monitoring only. Signal, Update, cancella
 - Runtime branching: `internal/workflows/conditional_branch.go`
 - Dynamic fan-out: `internal/workflows/dynamic_fan_out.go`
 - Failure policies: `internal/workflows/fan_out_policy.go`
+- Run tree and cooperative shutdown: `internal/workflows/training_job.go`, `internal/workflows/training_shard.go`

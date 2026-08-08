@@ -66,7 +66,7 @@ flowchart TD
 
 ## Current boundaries
 
-The supplied Compose stack is for local development. The project does not yet provide authentication, tenant isolation, a public extension SDK, dynamic Workflow installation, production deployment manifests, or user-facing control APIs such as cancel and retry.
+The supplied Compose stack is for local development. The project does not yet provide authentication, tenant isolation, a public extension SDK, dynamic Workflow installation, production deployment manifests, or user-facing control APIs beyond cancellation.
 
 Execution concerns that remain unproven here, including run-tree cancellation, Workflow versioning and replay, and run attach, are listed in [Design rationale](docs/design-rationale.md#not-yet-answered).
 
