@@ -46,6 +46,24 @@ Completed work is not rolled back when another branch fails. Compensation is a s
 
 When several Futures are ready in one Workflow Task, deterministic Selector behavior must not be described as exact wall-clock completion order.
 
+## Run trees
+
+A parent that does not own its children cannot make a true statement about the operation. Waiting for cancelled children to settle is what lets a parent report a result that covers the whole tree rather than only itself.
+
+The parent close policy decides what termination costs. Measured on the training job, terminating a parent whose shards were mid-interval:
+
+| Parent close policy | Shards after the parent is terminated | Last checkpoint |
+|---|---|---|
+| `TERMINATE` (SDK default) | Terminated immediately, no shutdown code runs | 20 |
+| `REQUEST_CANCEL` | Asked to stop, drain, and commit their checkpoint | 30 |
+| `ABANDON` | Left running with no parent | still running |
+
+The default is the destructive one, and `ABANDON` is how a run tree becomes a set of orphans. Choose the policy deliberately.
+
+Cancellation latency is what makes an operator reach for termination, so bound it. A cancelled unit of work given a grace period to finish preserves more work; when the grace expires the work is dropped and only progress since the last durable point is lost.
+
+Temporal delivers a result or an error, never both. A child that is cancelled must attach its outcome to the cancellation, or the parent learns nothing about where it stopped.
+
 ## Failure contract
 
 A useful terminal failure preserves:

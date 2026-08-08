@@ -41,6 +41,8 @@ Each Workflow here isolates one execution concern and runs against a real stack.
 | Retry behavior differing by dispatcher; unset attempt limits meaning unlimited | One explicit retry policy per branch. The 1,000-branch campaign reports retry exhaustion and recovery-after-retry as distinct outcomes (`fan_out_policy.go`, `fan_out_campaign.go`) | Demonstrated |
 | The same injected fault classified differently across runs | Branch behavior resolved in the Workflow before scheduling, and no Activity answers its own expired deadline with a cancellation (`fan_out_campaign.go`, `fault_injection.go`) | Demonstrated |
 | Deadlines coupling an outcome to Worker load | Deadlines set from the work each branch does, and no schedule-to-close deadline (`fan_out_policy.go`) | Demonstrated |
+| A parent that does not own its children | The training job waits for every shard to settle before stating a resume point, and asks them to stop rather than killing them (`training_job.go`) | Demonstrated |
+| Cancellation that stops nothing | Cancel drives a shard tree to a consistent checkpoint through the action the Workflow advertises (`training_shard.go`, `cmd/web/handlers.go`) | Demonstrated |
 | Callers unable to tell work they started from work they joined | Business-keyed starts carry the server's `USE_EXISTING` conflict policy and report whether this call created the execution (`cmd/web/runner.go`) | Demonstrated |
 | Terminal failure semantics undefined for fan-out | Three named policies with stated aggregation and cancellation behavior | Demonstrated |
 | Deduplication layers competing | Business-key identity: artifact keys exclude Run ID, attempt, and Build ID; a durable report reuses a matching row and rejects a conflicting one (`reusable_artifact.go`, `durable_report.go`) | Demonstrated |
@@ -81,6 +83,8 @@ Do not reintroduce these without a stated model and a reason against the entry.
 | Deadlines that include queue time on a large fan-out | Schedule-to-close makes a branch's outcome a function of Worker load rather than of the branch |
 | Reporting cancellation because a deadline passed | It races Temporal's timeout, so the same fault classifies as a timeout or a cancellation across runs, and winning the race ends the retry chain early |
 | One status Query per Workflow Task | Queries scale with Activity count, not with status changes, and are dispatched to the Worker running those Activities |
+| `ABANDON` as a parent close policy for work a parent owns | A terminated parent leaves its children running with nobody to stop them, which is how a run tree becomes a set of orphans |
+| Unbounded cancellation latency | An operation that cannot say when it will stop leaves termination as the only control, and termination skips every shutdown path |
 | Letting the SDK turn an already-started error into a run handle | It joins an execution without the caller being able to tell, and reverts to an error if `WorkflowExecutionErrorWhenAlreadyStarted` is ever set |
 | Abstractions added before an observed requirement | Speculative structure is the cost being avoided |
 
@@ -90,7 +94,6 @@ These failure modes are real and this repository does not currently disprove the
 
 | Open question | Why it matters |
 |---|---|
-| Cancellation, pause, and resume through a run tree | Cancellation that stops nothing is the defect; this repository has no parent and child lifecycle to test it against |
 | Workflow versioning, patching, and replay tests | A control-flow edit can break replay for in-flight runs. Long-lived operations make this the highest-severity untested area |
 | Read models without re-inverting | The engine eventually needs queryable run history. Building it wrong is exactly how the original inversion started |
 | Search attributes | Without them there is no way to query runs by business dimension |
