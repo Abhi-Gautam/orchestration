@@ -55,7 +55,10 @@ func (s *server) handleRunEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
-	terminal := make(map[runKey]struct{}, len(descriptors))
+	// A run is settled once it reports a terminal result or reports that its monitor
+	// stopped. Only the affected run leaves the stream; the browser shows that one card as
+	// interrupted while every other run on this connection keeps streaming.
+	settled := make(map[runKey]struct{}, len(descriptors))
 	keepalive := time.NewTicker(15 * time.Second)
 	defer keepalive.Stop()
 
@@ -69,21 +72,16 @@ func (s *server) handleRunEvents(w http.ResponseWriter, r *http.Request) {
 			}
 			flusher.Flush()
 		case <-subscriber.wake:
-			monitorFailed := false
 			for _, event := range subscriber.takeLatest() {
 				if err := writeRunSSE(w, event); err != nil {
 					return
 				}
-				key := runKey{workflowID: event.WorkflowID, runID: event.RunID}
-				switch event.kind {
-				case runEventTerminal:
-					terminal[key] = struct{}{}
-				case runEventMonitorError:
-					monitorFailed = true
+				if event.kind == runEventTerminal || event.kind == runEventMonitorError {
+					settled[runKey{workflowID: event.WorkflowID, runID: event.RunID}] = struct{}{}
 				}
 			}
 			flusher.Flush()
-			if monitorFailed || len(terminal) == len(descriptors) {
+			if len(settled) == len(descriptors) {
 				return
 			}
 		}

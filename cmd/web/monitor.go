@@ -71,6 +71,17 @@ func (monitor *runMonitor) subscribe(descriptor runDescriptor, subscriber *runSu
 	}, nil
 }
 
+// retire unregisters a watcher whose goroutine has stopped, so the next subscriber starts a
+// fresh one. Without it a watcher that stopped on an error stayed registered with nothing
+// running behind it, and later subscribers attached to it and never received another event.
+func (monitor *runMonitor) retire(watcher *runWatcher) {
+	monitor.mu.Lock()
+	defer monitor.mu.Unlock()
+	if monitor.watchers[watcher.key] == watcher {
+		delete(monitor.watchers, watcher.key)
+	}
+}
+
 func (monitor *runMonitor) unsubscribe(watcher *runWatcher, subscriber *runSubscriber) {
 	monitor.mu.Lock()
 	watcher.mu.Lock()
@@ -119,6 +130,8 @@ func (watcher *runWatcher) removeSubscriber(subscriber *runSubscriber) {
 }
 
 func (watcher *runWatcher) run() {
+	defer watcher.monitor.retire(watcher)
+
 	describe, err := watcher.monitor.server.temporal.DescribeWorkflowExecution(
 		watcher.ctx,
 		watcher.descriptor.WorkflowID,
@@ -165,8 +178,24 @@ func (watcher *runWatcher) run() {
 		return
 	}
 
-	watcher.queryStatus(descriptor)
-	initialHistoryLength := info.GetHistoryLength()
+	querier := watcher.startStatusQueries(descriptor)
+	querier.signal()
+	historyErr := watcher.followHistory(descriptor, info.GetHistoryLength(), querier)
+	// Stop querying before publishing the terminal event, so a status snapshot cannot
+	// arrive after it and leave a subscriber holding a run that never appears to finish.
+	querier.stop()
+
+	if historyErr != nil {
+		watcher.fail(historyErr)
+		return
+	}
+	if watcher.ctx.Err() != nil {
+		return
+	}
+	watcher.finish(descriptor)
+}
+
+func (watcher *runWatcher) followHistory(descriptor runDescriptor, knownEvents int64, querier *statusQuerier) error {
 	iterator := watcher.monitor.server.temporal.GetWorkflowHistory(
 		watcher.ctx,
 		descriptor.WorkflowID,
@@ -179,24 +208,50 @@ func (watcher *runWatcher) run() {
 	for iterator.HasNext() {
 		event, err := iterator.Next()
 		if err != nil {
-			watcher.fail(err)
-			return
+			return err
 		}
-		// Historical workflow-task completions predate this attachment and must not trigger queries.
-		if skipped < initialHistoryLength {
+		// Completions predating this attachment are already covered by the first Query.
+		if skipped < knownEvents {
 			skipped++
 			continue
 		}
-		if event.GetEventType() != enumspb.EVENT_TYPE_WORKFLOW_TASK_COMPLETED {
-			continue
+		if event.GetEventType() == enumspb.EVENT_TYPE_WORKFLOW_TASK_COMPLETED {
+			querier.signal()
 		}
-		watcher.queryStatus(descriptor)
 	}
+	return nil
+}
 
-	if watcher.ctx.Err() != nil {
-		return
+// statusQuerier keeps at most one status Query in flight. Querying on every Workflow Task
+// completion means a Query per Activity on a large fan-out, each one dispatched to the same
+// Worker that is running those Activities. Signalling instead collapses a burst into a
+// single Query and starts the next one only after the previous returned.
+type statusQuerier struct {
+	wake chan struct{}
+	done chan struct{}
+}
+
+func (watcher *runWatcher) startStatusQueries(descriptor runDescriptor) *statusQuerier {
+	querier := &statusQuerier{wake: make(chan struct{}, 1), done: make(chan struct{})}
+	go func() {
+		defer close(querier.done)
+		for range querier.wake {
+			watcher.queryStatus(descriptor)
+		}
+	}()
+	return querier
+}
+
+func (querier *statusQuerier) signal() {
+	select {
+	case querier.wake <- struct{}{}:
+	default:
 	}
-	watcher.finish(descriptor)
+}
+
+func (querier *statusQuerier) stop() {
+	close(querier.wake)
+	<-querier.done
 }
 
 func (watcher *runWatcher) queryStatus(descriptor runDescriptor) {
