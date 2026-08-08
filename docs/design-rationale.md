@@ -62,6 +62,10 @@ Do not reintroduce these without a stated model and a reason against the entry.
 | Returning all branch outputs in one payload | Bounded payloads are a hard constraint, not a limit to discover later |
 | Aggregation reduced to counters or samples | Fan-in must consume actual outputs; counters may be the result, not the input |
 | Treating retry, replay, reset, and regenerate as synonyms | Four distinct mechanisms; see the control terms in `execution-semantics.md` |
+| Positional detail lists on Activity failures | The SDK leaves surplus decode targets untouched and still reports success, so a drifted shape is published as a zero value that no check can catch |
+| Deadlines that include queue time on a large fan-out | Schedule-to-close makes a branch's outcome a function of Worker load rather than of the branch |
+| Reporting cancellation because a deadline passed | It races Temporal's timeout, so the same fault classifies as a timeout or a cancellation across runs, and winning the race ends the retry chain early |
+| One status Query per Workflow Task | Queries scale with Activity count, not with status changes, and are dispatched to the Worker running those Activities |
 | Abstractions added before an observed requirement | Speculative structure is the cost being avoided |
 
 ## Not yet answered

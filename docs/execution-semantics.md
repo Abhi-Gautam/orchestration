@@ -24,6 +24,16 @@ One Activity Execution may contain several attempts. Its Workflow Future exposes
 
 Fan-out aggregation acts on those terminal Futures, not on individual retry attempts.
 
+## Deadlines belong to the work
+
+A deadline should be breachable only by the work it bounds.
+
+- Start-to-close and heartbeat deadlines measure execution, so set them from what the Activity does.
+- Schedule-to-close includes task-queue wait. On a large fan-out it fails branches for being queued behind their siblings, which makes an outcome a function of Worker load rather than of the operation.
+- Resolve a branch's behavior in the Workflow when its deadlines depend on it. An Activity that decides at runtime what it will do cannot be given a deadline that matches it.
+
+An Activity must not report cancellation because its own deadline passed. That response races Temporal's timeout, and when the Activity wins the race the outcome is recorded as a cancellation and the retry chain ends early — so the same fault classifies two different ways across runs. Once a deadline passes, leave the outcome to Temporal.
+
 ## Fan-out failure policies
 
 | Policy | Behavior |
